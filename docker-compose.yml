@@ -1,0 +1,25 @@
+services:
+  seq:
+    image: datalust/seq:latest
+    ports:
+      - "5342:80"
+    environment:
+      - ACCEPT_EULA=Y
+      - SEQ_FIRSTRUN_NOAUTHENTICATION=true
+    restart: unless-stopped
+
+  footballmanager-api:
+    build:
+      context: ./src
+      dockerfile: FootballManager/FootballManager.Api/Dockerfile
+    ports:
+      - "5120:8080"
+    # Football Manager runs on the host; its plugin only answers requests addressed to localhost.
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - InfrastructureSettings__GameBridgeBaseUrl=http://host.docker.internal:5121
+      - InfrastructureSettings__GameBridgeHostHeader=localhost:5121
+      - Seq__ServerUrl=http://seq:80
+    restart: unless-stopped

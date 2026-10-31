@@ -1,0 +1,14 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/McpServer/McpServer.csproj" />
+  </Folder>
+  <Folder Name="/src/FootballManager/">
+    <Project Path="src/FootballManager/FootballManager.Api/FootballManager.Api.csproj" />
+    <Project Path="src/FootballManager/FootballManager.Application/FootballManager.Application.csproj" />
+    <Project Path="src/FootballManager/FootballManager.Domain/FootballManager.Domain.csproj" />
+    <Project Path="src/FootballManager/FootballManager.Infrastructure/FootballManager.Infrastructure.csproj" />
+  </Folder>
+  <Folder Name="/src/Plugin/">
+    <Project Path="src/Plugin/FootballManager.Plugin/FootballManager.Plugin.csproj" />
+  </Folder>
+</Solution>

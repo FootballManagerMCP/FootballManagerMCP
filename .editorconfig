@@ -1,0 +1,34 @@
+root = true
+
+[*]
+charset = utf-8
+indent_style = space
+trim_trailing_whitespace = true
+insert_final_newline = true
+
+[*.cs]
+indent_size = 4
+
+# --- Enforced C# style ---
+# Always use braces (no brace-less if/else/for/foreach/while/using/lock)
+csharp_prefer_braces = true:warning
+dotnet_diagnostic.IDE0011.severity = warning
+
+# Blank line after a block (the "blank line after if" half of the house rule)
+dotnet_style_allow_statement_immediately_after_block_experimental = false:warning
+
+# File-scoped namespaces
+csharp_style_namespace_declarations = file_scoped:warning
+
+# Allman braces (.NET default: brace on its own line)
+csharp_new_line_before_open_brace = all
+csharp_new_line_before_else = true
+csharp_new_line_before_catch = true
+csharp_new_line_before_finally = true
+
+# 'this.' not required
+dotnet_style_qualification_for_field = false:warning
+dotnet_style_qualification_for_property = false:warning
+
+[*.{json,yml,yaml,csproj,props,targets,slnx}]
+indent_size = 2

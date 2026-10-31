@@ -1,0 +1,73 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <!-- BepInEx's IL2CPP loader runs plugins on its bundled .NET 6 runtime -->
+    <TargetFramework>net6.0</TargetFramework>
+    <CheckEolTargetFramework>false</CheckEolTargetFramework>
+    <LangVersion>latest</LangVersion>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <FM27Dir Condition="'$(FM27Dir)' == ''">C:\Program Files (x86)\Steam\steamapps\common\Football Manager 27</FM27Dir>
+    <BepInExDir>$(FM27Dir)\BepInEx</BepInExDir>
+  </PropertyGroup>
+
+  <!-- Referenced from the local game install, never copied or committed: the interop assemblies are generated from
+       the game's own code by BepInEx on first launch. -->
+  <ItemGroup>
+    <Reference Include="BepInEx.Core">
+      <HintPath>$(BepInExDir)\core\BepInEx.Core.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="BepInEx.Unity.IL2CPP">
+      <HintPath>$(BepInExDir)\core\BepInEx.Unity.IL2CPP.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="Il2CppInterop.Runtime">
+      <HintPath>$(BepInExDir)\core\Il2CppInterop.Runtime.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="Il2Cppmscorlib">
+      <HintPath>$(BepInExDir)\interop\Il2Cppmscorlib.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="UnityEngine.CoreModule">
+      <HintPath>$(BepInExDir)\interop\UnityEngine.CoreModule.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="UnityEngine.UIElementsModule">
+      <HintPath>$(BepInExDir)\interop\UnityEngine.UIElementsModule.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="SI.Interop">
+      <HintPath>$(BepInExDir)\interop\SI.Interop.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="SI.Bindable.Reference.Core">
+      <HintPath>$(BepInExDir)\interop\SI.Bindable.Reference.Core.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="SI.Bindable">
+      <HintPath>$(BepInExDir)\interop\SI.Bindable.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="SI.Core">
+      <HintPath>$(BepInExDir)\interop\SI.Core.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="SI.UI">
+      <HintPath>$(BepInExDir)\interop\SI.UI.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="FM.UI">
+      <HintPath>$(BepInExDir)\interop\FM.UI.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+  </ItemGroup>
+
+  <!-- The game locks loaded plugins, so deploying only works while FM is closed. -->
+  <Target Name="DeployToGame" AfterTargets="Build">
+    <Copy SourceFiles="$(TargetPath)" DestinationFolder="$(BepInExDir)\plugins\MCPFM" SkipUnchangedFiles="true" Retries="0" ContinueOnError="WarnAndContinue" />
+  </Target>
+
+</Project>
