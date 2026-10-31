@@ -1,6 +1,8 @@
-using FootballManager.Api.Responses;
-using FootballManager.Domain.Entities;
+using FootballManager.Api.Responses.Players;
+using FootballManager.Api.Responses.Tactics.Effectiveness;
+using FootballManager.Domain.Players;
 using FootballManager.Domain.Tactics;
+using FootballManager.Domain.Tactics.Effectiveness;
 using Mapster;
 
 namespace FootballManager.Api.Mappings;

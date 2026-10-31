@@ -27,7 +27,7 @@ public static class ServiceCollectionExtensions
         });
 
         services.AddScoped<GameBridge>();
-        services.AddScoped<IGameClient, GameBridgeClient>();
+        services.AddScoped<ISquadGameClient, SquadBridgeClient>();
         services.AddScoped<ITacticsGameClient, TacticsBridgeClient>();
 
         var mappingConfig = new MappingConfig();

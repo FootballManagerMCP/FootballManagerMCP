@@ -2,8 +2,7 @@ using FluentResults;
 using FootballManager.Application.Exceptions;
 using FootballManager.Application.Interfaces;
 using FootballManager.Application.ResultErrors;
-using FootballManager.Domain.Attributes;
-using FootballManager.Domain.Entities;
+using FootballManager.Domain.Players;
 
 namespace FootballManager.Application.Services;
 
@@ -13,7 +12,7 @@ public interface ISquadService
         bool includeAttributes = false, bool includeHidden = false, CancellationToken cancellationToken = default);
 }
 
-public class SquadService(IGameClient gameClient) : ISquadService
+public class SquadService(ISquadGameClient gameClient) : ISquadService
 {
     public async Task<Result<Squad>> GetSquadAsync(
         bool includeAttributes = false, bool includeHidden = false, CancellationToken cancellationToken = default)

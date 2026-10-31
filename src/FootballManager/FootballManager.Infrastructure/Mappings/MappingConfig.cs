@@ -1,6 +1,9 @@
-using FootballManager.Domain.Entities;
+using FootballManager.Domain.Players;
 using FootballManager.Domain.Tactics;
-using FootballManager.Infrastructure.Dtos;
+using FootballManager.Domain.Tactics.Effectiveness;
+using FootballManager.Infrastructure.Dtos.Players;
+using FootballManager.Infrastructure.Dtos.Tactics;
+using FootballManager.Infrastructure.Dtos.Tactics.Effectiveness;
 using Mapster;
 
 namespace FootballManager.Infrastructure.Mappings;

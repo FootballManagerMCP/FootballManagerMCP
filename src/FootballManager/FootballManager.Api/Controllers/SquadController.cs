@@ -1,8 +1,8 @@
 using Asp.Versioning;
 using FootballManager.Api.Extensions;
-using FootballManager.Api.Responses;
+using FootballManager.Api.Responses.Players;
 using FootballManager.Application.Services;
-using FootballManager.Domain.Entities;
+using FootballManager.Domain.Players;
 using Mapster;
 using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.AspNetCore.Mvc;

@@ -1,10 +1,12 @@
 using System.Globalization;
 using System.Text.Json;
 using FootballManager.Application.Interfaces;
-using FootballManager.Domain.Entities;
 using FootballManager.Domain.Tactics;
+using FootballManager.Domain.Tactics.Effectiveness;
 using FootballManager.Infrastructure.Constants;
 using FootballManager.Infrastructure.Dtos;
+using FootballManager.Infrastructure.Dtos.Tactics;
+using FootballManager.Infrastructure.Dtos.Tactics.Effectiveness;
 using FootballManager.Infrastructure.Mappings;
 using Mapster;
 

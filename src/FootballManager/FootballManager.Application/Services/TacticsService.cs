@@ -2,7 +2,6 @@ using FluentResults;
 using FootballManager.Application.Exceptions;
 using FootballManager.Application.Interfaces;
 using FootballManager.Application.ResultErrors;
-using FootballManager.Domain.Entities;
 using FootballManager.Domain.Tactics;
 
 namespace FootballManager.Application.Services;

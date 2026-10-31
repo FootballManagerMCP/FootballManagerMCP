@@ -1,4 +1,3 @@
-using FootballManager.Domain.Entities;
 using FootballManager.Domain.Tactics;
 
 namespace FootballManager.Application.Interfaces;

@@ -1,4 +1,4 @@
-using FootballManager.Domain.Attributes;
+using FootballManager.Domain.Players;
 
 namespace FootballManager.Infrastructure.Constants;
 

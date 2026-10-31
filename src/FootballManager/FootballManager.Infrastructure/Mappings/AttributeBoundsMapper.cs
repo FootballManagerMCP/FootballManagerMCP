@@ -1,6 +1,5 @@
 using System.Text.Json;
-using FootballManager.Domain.Attributes;
-using FootballManager.Domain.Entities;
+using FootballManager.Domain.Players;
 using FootballManager.Infrastructure.Constants;
 
 namespace FootballManager.Infrastructure.Mappings;
