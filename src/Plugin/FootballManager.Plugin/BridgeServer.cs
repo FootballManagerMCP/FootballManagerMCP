@@ -60,8 +60,9 @@ internal sealed class BridgeServer(int port, ManualLogSource log) : IDisposable
             if (route is null)
             {
                 reply = Reply.Text(404, "Unknown endpoint. Try /status, /ui, /find?text=, /table, /catalog?set=property|reference|context, "
-                    + "/bindings?path=&depth=, /schema?type=person|team|club, /get?root=Human&props=, /squad?props=, "
-                    + "/player?index=&props= (data requests also take contexts=true, debug=true, timeoutMs=).");
+                    + "/bindings?path=&depth=, /schema?type=person|team|club, /names?ids=, /squad?props=, /player?index=&props=, "
+                    + "or /get?root=Human&props= with optional base=, list=, itemAs=, index=, each=Name:from:to, ctx=Name:value "
+                    + "and ref=Name:path (both repeatable), contexts=true, debug=true, timeoutMs=.");
             }
             else
             {
@@ -71,6 +72,10 @@ internal sealed class BridgeServer(int port, ManualLogSource log) : IDisposable
                     ? await task
                     : Reply.Text(504, "The game's main thread didn't answer in time (is the game busy processing?).");
             }
+        }
+        catch (ArgumentException exception)
+        {
+            reply = Reply.Text(400, exception.Message);
         }
         catch (Exception exception)
         {
@@ -96,21 +101,50 @@ internal sealed class BridgeServer(int port, ManualLogSource log) : IDisposable
         "/bindings" => Text(() => BindingTreeDumper.Dump(query["path"], ParseInt(query["depth"], 1))),
         "/schema" => Json(() => MainThreadDispatcher.RunAsync(
             () => PropertySchema.Describe(query["type"] ?? "person", query["filter"]))),
-        "/get" => Json(() => DataQueries.GetAsync(
-            query["root"] ?? DataQueries.HumanRoot, Properties(query, []), query["contexts"] == "true", AnswerTimeout(query),
-            query["debug"] == "true")),
-        "/squad" => Json(() => DataQueries.PlayersAsync(
-            Properties(query, DataQueries.DefaultPlayerProperties), null, query["contexts"] == "true", AnswerTimeout(query),
-            query["debug"] == "true")),
-        "/player" => Json(() => DataQueries.PlayersAsync(
-            Properties(query, DataQueries.DefaultPlayerProperties), ParseInt(query["index"], 0), query["contexts"] == "true",
-            AnswerTimeout(query), query["debug"] == "true")),
+        "/names" => Text(() => Data.Json.Serialize(IdentifierCatalog.NamesOf(query["ids"])), "application/json; charset=utf-8"),
+        "/get" => Json(() => DataQueries.RunAsync(GetQuery(query), AnswerTimeout(query), query["debug"] == "true")),
+        "/squad" => Json(() => DataQueries.RunAsync(SquadQuery(query, null), AnswerTimeout(query), query["debug"] == "true")),
+        "/player" => Json(() => DataQueries.RunAsync(
+            SquadQuery(query, ParseInt(query["index"], 0)), AnswerTimeout(query), query["debug"] == "true")),
         _ => null
     };
 
-    private static Func<Task<Reply>> Text(Func<string> work)
+    private static DataQuery GetQuery(NameValueCollection query)
     {
-        return async () => Reply.Text(200, await MainThreadDispatcher.RunAsync(work));
+        return new DataQuery(
+            Root: query["root"] ?? DataQueries.HumanRoot,
+            Paths: Properties(query, []),
+            BasePath: NullIfEmpty(query["base"]),
+            ListPath: NullIfEmpty(query["list"]),
+            ItemAs: NullIfEmpty(query["itemAs"]),
+            Index: query["index"] is null ? null : ParseInt(query["index"], 0),
+            Each: NullIfEmpty(query["each"]) is { } each ? ContextRange.Parse(each) : null,
+            Contexts: (query.GetValues("ctx") ?? []).Select(ContextLiteral.Parse).ToList(),
+            ContextPaths: (query.GetValues("ref") ?? []).Select(ContextPath.Parse).ToList(),
+            WithHumanAndTeam: query["contexts"] == "true");
+    }
+
+    // The user's first-team players, one row each.
+    private static DataQuery SquadQuery(NameValueCollection query, int? index)
+    {
+        return new DataQuery(
+            Root: DataQueries.HumanRoot,
+            Paths: Properties(query, DataQueries.DefaultPlayerProperties),
+            ListPath: DataQueries.SquadPath,
+            Index: index,
+            Contexts: (query.GetValues("ctx") ?? []).Select(ContextLiteral.Parse).ToList(),
+            ContextPaths: (query.GetValues("ref") ?? []).Select(ContextPath.Parse).ToList(),
+            WithHumanAndTeam: query["contexts"] == "true");
+    }
+
+    private static string? NullIfEmpty(string? value)
+    {
+        return string.IsNullOrWhiteSpace(value) ? null : value;
+    }
+
+    private static Func<Task<Reply>> Text(Func<string> work, string contentType = "text/plain; charset=utf-8")
+    {
+        return async () => new Reply(200, await MainThreadDispatcher.RunAsync(work), contentType);
     }
 
     private static Func<Task<Reply>> Json(Func<Task<string>> work)

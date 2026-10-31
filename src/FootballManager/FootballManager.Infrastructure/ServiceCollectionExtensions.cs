@@ -15,7 +15,7 @@ public static class ServiceCollectionExtensions
     {
         services.AddSingleton(settings);
 
-        services.AddHttpClient(GameBridgeClient.HttpClientName, client =>
+        services.AddHttpClient(GameBridge.HttpClientName, client =>
         {
             client.BaseAddress = new Uri(settings.GameBridgeBaseUrl);
             client.Timeout = TimeSpan.FromSeconds(settings.TimeoutSeconds);
@@ -26,7 +26,9 @@ public static class ServiceCollectionExtensions
             }
         });
 
+        services.AddScoped<GameBridge>();
         services.AddScoped<IGameClient, GameBridgeClient>();
+        services.AddScoped<ITacticsGameClient, TacticsBridgeClient>();
 
         var mappingConfig = new MappingConfig();
         mappingConfig.Register(TypeAdapterConfig.GlobalSettings);

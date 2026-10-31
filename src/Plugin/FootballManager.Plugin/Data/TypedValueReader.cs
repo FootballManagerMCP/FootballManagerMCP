@@ -1,3 +1,4 @@
+using FM.GamePlugin;
 using FM.UI;
 using FootballManager.Plugin.Inspection;
 using Il2CppInterop.Runtime;
@@ -16,7 +17,8 @@ namespace FootballManager.Plugin.Data;
 // and only enums go through the game's own AsString (called on the TypedValue, which is a class).
 internal static class TypedValueReader
 {
-    private const int MaxDepth = 3;
+    // Deep enough for a list of rows holding scored sub-records (a player's best positions in a tactic).
+    private const int MaxDepth = 5;
     private const int MaxListItems = 200;
 
     // Main thread only, like everything that reads game values.
@@ -125,6 +127,11 @@ internal static class TypedValueReader
             return owner.AsString();
         }
 
+        if (type.FullName == "FM.GamePlugin.GameDate")
+        {
+            return ReadGameDate(content);
+        }
+
         var reference = content.TryCast<InteropReference>();
 
         if (reference is not null)
@@ -139,7 +146,23 @@ internal static class TypedValueReader
             return ReadList(list, depth);
         }
 
+        var fields = content.TryCast<Record>();
+
+        if (fields is not null)
+        {
+            return ReadRecord(fields, depth);
+        }
+
         return new Dictionary<string, object?> { ["$type"] = type.FullName };
+    }
+
+    // The game packs its dates; its own static ToDateTime unpacks one (a static call with a plain struct is safe, unlike
+    // an instance call on a box), and the result's ticks are read straight from the struct.
+    private static string ReadGameDate(Il2CppObject content)
+    {
+        var dateTime = GameDate.ToDateTime(content.Unbox<GameDate>());
+        var ticks = (long)(dateTime._dateData & 0x3FFFFFFFFFFFFFFFUL);
+        return new System.DateTime(ticks).ToString("yyyy-MM-dd");
     }
 
     private static Dictionary<string, object?> ReadReference(InteropReference reference)
@@ -192,6 +215,25 @@ internal static class TypedValueReader
         }
 
         return count <= MaxListItems ? items : new Dictionary<string, object?> { ["$count"] = count, ["items"] = items };
+    }
+
+    // The records the game builds for its screens (DynamicReference: a dropdown option, a table row) are plain maps of
+    // property id to value.
+    private static Dictionary<string, object?> ReadRecord(Record fields, int depth)
+    {
+        if (depth >= MaxDepth)
+        {
+            return new Dictionary<string, object?> { ["$fields"] = fields.Count };
+        }
+
+        var result = new Dictionary<string, object?>();
+
+        foreach (var pair in fields)
+        {
+            result[IdentifierCatalog.NameOf(pair.Key)] = Read(pair.Value, depth + 1);
+        }
+
+        return result;
     }
 
     private static object? Finite(double number)

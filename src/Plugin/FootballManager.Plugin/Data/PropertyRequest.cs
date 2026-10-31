@@ -49,7 +49,10 @@ internal sealed class PropertyRequest : IDisposable
     }
 
     public static PropertyRequest Start(
-        TypedValue? source, IReadOnlyList<string> paths, IReadOnlyList<RequestContext> contexts, string? listPath = null)
+        TypedValue? source,
+        IReadOnlyList<string> paths,
+        IReadOnlyList<RequestContext> contexts,
+        IReadOnlyDictionary<string, PropertyCapture>? captures = null)
     {
         if (source is null)
         {
@@ -70,7 +73,7 @@ internal sealed class PropertyRequest : IDisposable
         {
             foreach (var path in paths)
             {
-                request.Add(source, path, path == listPath);
+                request.Add(source, path, captures?.GetValueOrDefault(path) ?? PropertyCapture.None);
             }
         }
         catch
@@ -82,14 +85,15 @@ internal sealed class PropertyRequest : IDisposable
         return request;
     }
 
+    // One request per (source, contexts) pair, e.g. one per player, or one per tactic position.
     public static List<PropertyRequest> StartAll(
-        IEnumerable<TypedValue> sources, IReadOnlyList<string> paths, IReadOnlyList<RequestContext> contexts)
+        IEnumerable<(TypedValue Source, IReadOnlyList<RequestContext> Contexts)> requestsToStart, IReadOnlyList<string> paths)
     {
         var requests = new List<PropertyRequest>();
 
         try
         {
-            foreach (var source in sources)
+            foreach (var (source, contexts) in requestsToStart)
             {
                 requests.Add(Start(source, paths, contexts));
             }
@@ -115,19 +119,11 @@ internal sealed class PropertyRequest : IDisposable
         }
     }
 
-    // The items of a list-valued path started with listPath, still valid as sources once this request is gone.
-    public List<TypedValue> FinishWithList(string path)
+    // The bindings with whatever they captured, which stays valid once this request is gone.
+    public IReadOnlyList<PropertyBinding> FinishWithCaptures()
     {
-        try
-        {
-            var binding = _bindingsByPath.First(b => b.Path == path);
-            return binding.Items
-                ?? throw new InvalidOperationException(binding.Error ?? $"The game didn't send '{path}' in time (or it isn't a list).");
-        }
-        finally
-        {
-            Dispose();
-        }
+        Dispose();
+        return _bindingsByPath;
     }
 
     public void Dispose()
@@ -170,9 +166,9 @@ internal sealed class PropertyRequest : IDisposable
         }
     }
 
-    private void Add(TypedValue source, string path, bool copyItems)
+    private void Add(TypedValue source, string path, PropertyCapture capture)
     {
-        var binding = new PropertyBinding(path, copyItems);
+        var binding = new PropertyBinding(path, capture);
         _bindingsByPath.Add(binding);
 
         var unknown = path.Split('.').FirstOrDefault(segment => !IdentifierCatalog.IsProperty(segment));

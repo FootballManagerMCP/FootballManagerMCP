@@ -54,12 +54,35 @@ internal static class IdentifierCatalog
     // Ids inside a reference may come from any of the sets.
     public static string NameOf(uint id)
     {
+        return TryNameOf(id) ?? $"#{id}";
+    }
+
+    // Values like a team instruction's option are ids into these sets too (e.g. "MuchHigherTempo"); null if unknown.
+    public static string? TryNameOf(uint id)
+    {
         if (ReferenceIdentifierSet.Instance.HasID(id))
         {
             return ReferenceIdentifierSet.Instance.GetInfo(id).Name;
         }
 
-        return PropertyIdentifierSet.Instance.HasID(id) ? PropertyIdentifierSet.Instance.GetInfo(id).Name : $"#{id}";
+        if (PropertyIdentifierSet.Instance.HasID(id))
+        {
+            return PropertyIdentifierSet.Instance.GetInfo(id).Name;
+        }
+
+        return ContextIdentifierSet.Instance.HasID(id) ? ContextIdentifierSet.Instance.GetInfo(id).Name : null;
+    }
+
+    public static Dictionary<string, string?> NamesOf(string? ids)
+    {
+        var names = new Dictionary<string, string?>();
+
+        foreach (var text in (ids ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+        {
+            names[text] = uint.TryParse(text, out var id) ? TryNameOf(id) : null;
+        }
+
+        return names;
     }
 
     public static bool IsProperty(string name)

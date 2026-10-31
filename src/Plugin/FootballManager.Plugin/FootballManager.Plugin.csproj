@@ -63,6 +63,10 @@
       <HintPath>$(BepInExDir)\interop\FM.UI.dll</HintPath>
       <Private>false</Private>
     </Reference>
+    <Reference Include="FM.GamePlugin">
+      <HintPath>$(BepInExDir)\interop\FM.GamePlugin.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
   </ItemGroup>
 
   <!-- The game locks loaded plugins, so deploying only works while FM is closed. -->

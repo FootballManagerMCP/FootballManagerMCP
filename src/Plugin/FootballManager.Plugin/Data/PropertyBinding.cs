@@ -6,7 +6,7 @@ namespace FootballManager.Plugin.Data;
 
 // One requested path within a PropertyRequest. The value is only valid inside the callback (the game pools values),
 // so everything needed later is copied there.
-internal sealed class PropertyBinding(string path, bool copyItems)
+internal sealed class PropertyBinding(string path, PropertyCapture capture)
 {
     public string Path { get; } = path;
 
@@ -23,8 +23,10 @@ internal sealed class PropertyBinding(string path, bool copyItems)
 
     public object? Value { get; private set; }
 
-    // For a list-valued path that feeds further requests (e.g. the squad), copies of its items.
-    public List<TypedValue>? Items { get; private set; }
+    // Copies kept per PropertyCapture, still valid as sources once the request is gone.
+    public TypedValue? CapturedValue { get; private set; }
+
+    public List<TypedValue>? CapturedItems { get; private set; }
 
     public string? Error { get; set; }
 
@@ -37,9 +39,13 @@ internal sealed class PropertyBinding(string path, bool copyItems)
             LastCallbackUtc = DateTime.UtcNow;
             Value = TypedValueReader.Read(value);
 
-            if (copyItems)
+            if (capture == PropertyCapture.Value)
             {
-                Items = CopyItems(value);
+                CapturedValue = TypedValue.CreateCopyFrom(value);
+            }
+            else if (capture == PropertyCapture.Items)
+            {
+                CapturedItems = CopyItems(value);
             }
 
             Received = true;
