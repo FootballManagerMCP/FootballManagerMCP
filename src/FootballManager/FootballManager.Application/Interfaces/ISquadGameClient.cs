@@ -7,8 +7,12 @@ public interface ISquadGameClient
 {
     /// <summary>
     /// Returns the user's first-team squad with the given <paramref name="attributes"/> for each player, plus current
-    /// and potential ability when <paramref name="includeAbility"/> is set. Only what is asked for is fetched.
+    /// and potential ability when <paramref name="includeAbility"/> is set and this season's numbers when
+    /// <paramref name="includeStats"/> is. Only what is asked for is fetched.
     /// </summary>
     Task<Squad> GetSquadAsync(
-        IReadOnlyCollection<AttributeDefinition> attributes, bool includeAbility, CancellationToken cancellationToken = default);
+        IReadOnlyCollection<AttributeDefinition> attributes,
+        bool includeAbility,
+        bool includeStats,
+        CancellationToken cancellationToken = default);
 }

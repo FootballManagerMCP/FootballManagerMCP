@@ -12,12 +12,16 @@ namespace FootballManager.Infrastructure.Clients;
 internal sealed class SquadBridgeClient(GameBridge bridge) : ISquadGameClient
 {
     public async Task<Squad> GetSquadAsync(
-        IReadOnlyCollection<AttributeDefinition> attributes, bool includeAbility, CancellationToken cancellationToken = default)
+        IReadOnlyCollection<AttributeDefinition> attributes,
+        bool includeAbility,
+        bool includeStats,
+        CancellationToken cancellationToken = default)
     {
         var human = await bridge.GetRecordAsync<BridgeHumanDto>(
             BridgeQuery.FromHuman().Props([GameConstants.TeamName]), cancellationToken);
 
-        var squad = await bridge.GetSquadAsync<BridgePlayerDto>(PlayerPaths(attributes, includeAbility), cancellationToken);
+        var squad = await bridge.GetSquadAsync<BridgePlayerDto>(
+            PlayerPaths(attributes, includeAbility, includeStats), cancellationToken);
 
         return new Squad
         {
@@ -26,7 +30,8 @@ internal sealed class SquadBridgeClient(GameBridge bridge) : ISquadGameClient
         };
     }
 
-    private static List<string> PlayerPaths(IReadOnlyCollection<AttributeDefinition> attributes, bool includeAbility)
+    private static List<string> PlayerPaths(
+        IReadOnlyCollection<AttributeDefinition> attributes, bool includeAbility, bool includeStats)
     {
         var paths = new List<string>(GameConstants.PlayerBasics);
 
@@ -40,6 +45,11 @@ internal sealed class SquadBridgeClient(GameBridge bridge) : ISquadGameClient
         {
             paths.Add(GameConstants.CurrentAbility);
             paths.Add(GameConstants.PotentialAbility);
+        }
+
+        if (includeStats)
+        {
+            paths.AddRange(GameConstants.PlayerSeasonStats);
         }
 
         return paths;

@@ -8,4 +8,7 @@ internal sealed class BridgeHumanDto
 {
     [JsonPropertyName(GameConstants.TeamName)]
     public string? TeamName { get; set; }
+
+    [JsonPropertyName(GameConstants.TeamId)]
+    public int? TeamId { get; set; }
 }

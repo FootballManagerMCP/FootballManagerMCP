@@ -6,7 +6,7 @@ namespace McpServer.Tools;
 [McpServerToolType]
 public static class TacticsTools
 {
-    [McpServerTool(Name = "fm_get_tactics")]
+    [McpServerTool(Name = "get_tactics")]
     [Description("Get the user's tactics from their running Football Manager 27 save, read live from the game without " +
                  "changing anything. Returns the three tactic slots (name, which one is active, and the game's own " +
                  "'tactical effectiveness' assessment of each: overall, player ability with role suitability and " +
@@ -28,7 +28,7 @@ public static class TacticsTools
         return await response.ReadContentOrError();
     }
 
-    [McpServerTool(Name = "fm_get_role_fit")]
+    [McpServerTool(Name = "get_role_fit")]
     [Description("For one position, list every role the game offers there (in or out of possession), the attributes " +
                  "each role relies on most, and the squad players the game rates best in it (0-20, the game's stars, " +
                  "20 = five stars). Players who can't play the position at all are left out. Use it to find who should " +

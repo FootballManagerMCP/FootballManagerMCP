@@ -29,6 +29,9 @@ public class Player
 
     public List<PlayerAttribute> Attributes { get; set; } = [];
 
+    /// <summary>Only filled when asked for.</summary>
+    public PlayerSeasonStats? SeasonStats { get; set; }
+
     /// <summary>Hidden. Only requested when the user agreed to see hidden data; null when the game masks it.</summary>
     public int? CurrentAbility { get; set; }
 

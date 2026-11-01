@@ -9,6 +9,7 @@ internal static class GameConstants
     public const string HumanRoot = "Human";
 
     public const string TeamName = "Team.Name";
+    public const string TeamId = "Team.UniqueId";
 
     public const string UniqueId = "UniqueId";
     public const string Name = "Name";
@@ -27,6 +28,28 @@ internal static class GameConstants
     public static readonly string[] PlayerBasics =
     [
         UniqueId, Name, Age, Positions, BestRole, Personality, Morale, Condition, Sharpness, IsInjured, AverageRating
+    ];
+
+    // This season's numbers, all competitive matches for the club together.
+    public const string Appearances = "Appearances";
+    public const string Minutes = "Minutes";
+    public const string Goals = "Goals";
+    public const string Assists = "Assists";
+    public const string ExpectedGoals = "ExpectedGoals";
+    public const string NonPenaltyExpectedGoals = "NonPenaltyExpectedGoals";
+    public const string ExpectedGoalsOverperformance = "ExpectedGoalsOverperformance";
+    public const string ExpectedGoalsPerShot = "ExpectedGoalsPerShot";
+    public const string ExpectedAssists = "ExpectedAssists";
+    public const string ShotsPer90 = "ShotsPer90";
+    public const string ShotsOnTarget = "ShotsOnTarget";
+    public const string KeyPasses = "KeyPasses";
+    public const string ChancesCreated = "ChancesCreated";
+    public const string PassCompletionPercentage = "PassCompletionPercentage";
+
+    public static readonly string[] PlayerSeasonStats =
+    [
+        Appearances, Minutes, Goals, Assists, ExpectedGoals, NonPenaltyExpectedGoals, ExpectedGoalsOverperformance,
+        ExpectedGoalsPerShot, ExpectedAssists, ShotsPer90, ShotsOnTarget, KeyPasses, ChancesCreated, PassCompletionPercentage
     ];
 
     // An attribute is a small record: its range bounds are equal once the player is fully known.

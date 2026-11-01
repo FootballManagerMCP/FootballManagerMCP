@@ -6,7 +6,7 @@ namespace McpServer.Tools;
 [McpServerToolType]
 public static class SquadTools
 {
-    [McpServerTool(Name = "fm_get_squad")]
+    [McpServerTool(Name = "get_squad")]
     [Description("Get the user's first-team squad from their running Football Manager 27 save, read live from the game. " +
                  "For each player: FM id, name, age, positions, best role, personality, morale, condition (%, absent " +
                  "while injured), match sharpness (%), injury status and average rating this season. Optionally each " +
@@ -23,12 +23,18 @@ public static class SquadTools
                      "changes how the game is played, so you MUST ask the user and get their explicit agreement before " +
                      "setting this to true. Without FM's In-Game Editor the game masks them: they come back null and " +
                      "hiddenDataMasked is true.")]
-        bool includeHidden = false)
+        bool includeHidden = false,
+        [Description("Include each player's numbers this season, all competitive matches together: appearances, " +
+                     "minutes, goals, assists, xG, non-penalty xG, xG overperformance (goals minus xG; below zero means " +
+                     "finishing below the chances' worth), xG per shot (chance quality), xA, shots per 90, shots on " +
+                     "target, key passes, chances created and pass completion.")]
+        bool includeStats = false)
     {
         var http = httpFactory.CreateClient("FootballManagerApi");
 
         var query = $"includeAttributes={includeAttributes.ToString().ToLowerInvariant()}" +
-                    $"&includeHidden={includeHidden.ToString().ToLowerInvariant()}";
+                    $"&includeHidden={includeHidden.ToString().ToLowerInvariant()}" +
+                    $"&includeStats={includeStats.ToString().ToLowerInvariant()}";
 
         var response = await http.GetAsync($"/api/v1/squad?{query}");
         return await response.ReadContentOrError();

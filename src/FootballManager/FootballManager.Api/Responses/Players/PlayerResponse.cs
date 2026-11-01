@@ -17,6 +17,9 @@ public class PlayerResponse
     /// <summary>Category ("technical", "mental", ...) to attribute name to value: "12", "11-14" or null if masked.</summary>
     public Dictionary<string, Dictionary<string, string?>>? Attributes { get; set; }
 
+    /// <summary>This season, all competitive matches for the club together.</summary>
+    public PlayerSeasonStatsResponse? SeasonStats { get; set; }
+
     public int? CurrentAbility { get; set; }
     public int? PotentialAbility { get; set; }
 }

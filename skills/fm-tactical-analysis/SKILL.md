@@ -1,6 +1,6 @@
 ---
 name: fm-tactical-analysis
-description: Analyse the user's Football Manager 27 tactics against their squad, using the football-manager MCP tools (fm_get_tactics, fm_get_role_fit, fm_get_squad). Use when the user asks to review, assess or improve their tactics, whether a tactic suits their players, which of their tactic slots to use, who should play where or in which role, or why a tactic isn't working.
+description: Analyse the user's Football Manager 27 tactics against their squad and their results, using the football-manager MCP tools (get_tactics, get_role_fit, get_squad, get_matches, get_match). Use when the user asks to review, assess or improve their tactics, whether a tactic suits their players, which of their tactic slots to use, who should play where or in which role, or why a tactic isn't working.
 ---
 
 # FM tactical analysis
@@ -10,12 +10,17 @@ live game and change nothing; every change is the user's to make in the game.
 
 ## 1. Gather
 
-1. Call `fm_get_tactics`, always first. It covers the three slots with the game's effectiveness assessment, and the
+1. Call `get_tactics`, always first. It covers the three slots with the game's effectiveness assessment, and the
    active tactic in full: formations, mentality, style, team instructions, and each lineup slot's player, position,
    role and role rating in both phases.
-2. Call `fm_get_role_fit` only for the positions the first pass flags (step 2). Use one call per position and phase,
+2. Call `get_matches`, always. It gives the season's record and every match with the shape the team lined up in, so
+   results can be tied to the tactic actually used. Match each shape to a slot by its formation (the slots use
+   different shapes). Open a few matches with `get_match` when a pattern needs explaining, e.g. the draws, or the
+   games a tactic was used in.
+3. Call `get_role_fit` only for the positions the first pass flags (step 2). Use one call per position and phase,
    with the base code (`DC` for a DCL slot). Don't call it for every position by reflex.
-3. Call `fm_get_squad` with `includeAttributes: true` when a point hinges on attributes, such as pace behind a high
+4. Call `get_squad` with `includeStats: true` when finishing or creativity is in question (xG overperformance, xG per
+   shot, key passes), and with `includeAttributes: true` when a point hinges on attributes, such as pace behind a high
    line, stamina for heavy pressing, or a role's key attributes. Never set `includeHidden` unless the user has
    explicitly agreed in this conversation.
 
@@ -36,6 +41,17 @@ live game and change nothing; every change is the user's to make in the game.
 | 12 or less | A real weakness |
 
 Compare against the squad, not in absolute terms: a 15 is the best available if nobody rates higher.
+
+Role ratings are a blunt measure. They don't see a player's standout quality, such as a passer who makes a chance
+every game from a role he rates 14 in. Before advising that a player be dropped or moved, check his match numbers (key
+passes, chances created, xA) and ask the user what they see in him.
+
+**Results**
+- xG measures the chances, goals the finishing. Goals well below xG over several matches point to finishing; low xG
+  with plenty of possession points to chance creation (shots from poor positions, low xG per shot).
+- Possession says who had the ball, not who was better. A low share away from home means the opponent was allowed
+  the ball, which is a choice of the tactic as much as of the opponent.
+- A few matches are a small sample. Say so when a pattern rests on three or four games.
 
 **Effectiveness parts**
 - **Player ability** is role suitability (familiarity) plus capability (quality).
@@ -68,7 +84,7 @@ Work through these in order and keep notes. Only the conclusions go into the rep
 2. **Squad fit in the active tactic.** For each lineup slot, in each phase:
    - Is the player's rating in the chosen role low compared with the squad? Flag 13 or below.
    - Does the same player rate 2+ higher in another role at that position (`roleOptions`)? That's an easy fix.
-   - Does someone else in the squad rate 2+ higher there? Confirm with `fm_get_role_fit`, and check that player isn't
+   - Does someone else in the squad rate 2+ higher there? Confirm with `get_role_fit`, and check that player isn't
      needed elsewhere.
    - Is a player out of their natural area, such as a DM playing on the wing?
 3. **Coherence.**
@@ -77,11 +93,16 @@ Work through these in order and keep notes. Only the conclusions go into the rep
    - Do the team instructions fit the mentality, the style and the players? Examples: a high line or high line of
      engagement needs pace at the back; heavy pressing needs stamina and work rate; direct passing needs a target or
      runners.
-4. **Understanding and complexity.**
+   - Watch for instructions that pull against each other. A common one is a deep defensive line (or dropping off)
+     with a high line of engagement and a hard press: the front presses high while the back sits deep, and the gap
+     between the lines grows.
+4. **Results by tactic.** Using `get_matches`, group the matches by the shape played. For each tactic, how did it do,
+   home and away, and against which kind of opponent? Look at xG for and against and possession, as well as results.
+5. **Understanding and complexity.**
    - Low-understanding areas are training priorities.
    - High complexity with low comprehension argues for simplifying instructions.
-5. **Alternatives.** Use the other slots, and the game's recommended styles, to judge whether the user should switch,
-   adapt, or keep the current tactic for now.
+6. **Alternatives.** Use the other slots, the game's recommended styles, and how each tactic actually did, to judge
+   whether the user should switch, adapt, or keep the current tactic for now.
 
 Separate what the game says (scores, ratings, advice) from your own reasoning, and never invent attributes or ratings.
 
@@ -90,8 +111,8 @@ Separate what the game says (scores, ratings, advice) from your own reasoning, a
 Keep it tight. Use this structure:
 
 1. **Verdict.** Two or three sentences: which tactic suits this squad best and the single biggest issue.
-2. **Slots at a glance.** A small table: slot, overall, player ability, role suitability, tactical understanding, one
-   line on its character.
+2. **Slots at a glance.** A small table: slot, overall, player ability, role suitability, tactical understanding, its
+   record this season (matches, W-D-L, xG for and against), one line on its character.
 3. **Main issues**, ranked, three to five. Each one cites the evidence: players, ratings, scores.
 4. **Suggested changes**, each concrete and doable in the game: "Move X to Y", "Change Z's in-possession role from A to
    B (16 vs 14)", "Swap instruction ...", "Focus training on ...". Lead with the high-impact, low-risk ones.

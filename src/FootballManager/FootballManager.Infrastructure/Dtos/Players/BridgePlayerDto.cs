@@ -1,6 +1,7 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using FootballManager.Infrastructure.Constants;
+using FootballManager.Infrastructure.Serialization;
 
 namespace FootballManager.Infrastructure.Dtos.Players;
 
@@ -46,6 +47,49 @@ internal sealed class BridgePlayerDto
 
     [JsonPropertyName(GameConstants.PotentialAbility)]
     public int? PotentialAbility { get; set; }
+
+    // This season's numbers, only present when asked for.
+    [JsonPropertyName(GameConstants.Appearances), JsonConverter(typeof(StatValueJsonConverter))]
+    public double? Appearances { get; set; }
+
+    [JsonPropertyName(GameConstants.Minutes), JsonConverter(typeof(StatValueJsonConverter))]
+    public double? Minutes { get; set; }
+
+    [JsonPropertyName(GameConstants.Goals), JsonConverter(typeof(StatValueJsonConverter))]
+    public double? Goals { get; set; }
+
+    [JsonPropertyName(GameConstants.Assists), JsonConverter(typeof(StatValueJsonConverter))]
+    public double? Assists { get; set; }
+
+    [JsonPropertyName(GameConstants.ExpectedGoals), JsonConverter(typeof(StatValueJsonConverter))]
+    public double? ExpectedGoals { get; set; }
+
+    [JsonPropertyName(GameConstants.NonPenaltyExpectedGoals), JsonConverter(typeof(StatValueJsonConverter))]
+    public double? NonPenaltyExpectedGoals { get; set; }
+
+    [JsonPropertyName(GameConstants.ExpectedGoalsOverperformance), JsonConverter(typeof(StatValueJsonConverter))]
+    public double? ExpectedGoalsOverperformance { get; set; }
+
+    [JsonPropertyName(GameConstants.ExpectedGoalsPerShot), JsonConverter(typeof(StatValueJsonConverter))]
+    public double? ExpectedGoalsPerShot { get; set; }
+
+    [JsonPropertyName(GameConstants.ExpectedAssists), JsonConverter(typeof(StatValueJsonConverter))]
+    public double? ExpectedAssists { get; set; }
+
+    [JsonPropertyName(GameConstants.ShotsPer90), JsonConverter(typeof(StatValueJsonConverter))]
+    public double? ShotsPer90 { get; set; }
+
+    [JsonPropertyName(GameConstants.ShotsOnTarget), JsonConverter(typeof(StatValueJsonConverter))]
+    public double? ShotsOnTarget { get; set; }
+
+    [JsonPropertyName(GameConstants.KeyPasses), JsonConverter(typeof(StatValueJsonConverter))]
+    public double? KeyPasses { get; set; }
+
+    [JsonPropertyName(GameConstants.ChancesCreated), JsonConverter(typeof(StatValueJsonConverter))]
+    public double? ChancesCreated { get; set; }
+
+    [JsonPropertyName(GameConstants.PassCompletionPercentage), JsonConverter(typeof(StatValueJsonConverter))]
+    public double? PassCompletionPercentage { get; set; }
 
     /// <summary>
     /// Every other requested path: the attribute range bounds, keyed like "AttributeFinishing.AttributeMinValue".

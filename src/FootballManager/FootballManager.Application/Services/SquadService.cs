@@ -9,13 +9,19 @@ namespace FootballManager.Application.Services;
 public interface ISquadService
 {
     Task<Result<Squad>> GetSquadAsync(
-        bool includeAttributes = false, bool includeHidden = false, CancellationToken cancellationToken = default);
+        bool includeAttributes = false,
+        bool includeHidden = false,
+        bool includeStats = false,
+        CancellationToken cancellationToken = default);
 }
 
 public class SquadService(ISquadGameClient gameClient) : ISquadService
 {
     public async Task<Result<Squad>> GetSquadAsync(
-        bool includeAttributes = false, bool includeHidden = false, CancellationToken cancellationToken = default)
+        bool includeAttributes = false,
+        bool includeHidden = false,
+        bool includeStats = false,
+        CancellationToken cancellationToken = default)
     {
         // Hidden values are never fetched unless asked for, so they can't leak into an answer by accident.
         var attributes = new List<AttributeDefinition>();
@@ -34,7 +40,7 @@ public class SquadService(ISquadGameClient gameClient) : ISquadService
 
         try
         {
-            squad = await gameClient.GetSquadAsync(attributes, includeHidden, cancellationToken);
+            squad = await gameClient.GetSquadAsync(attributes, includeHidden, includeStats, cancellationToken);
         }
         catch (GameUnavailableException exception)
         {

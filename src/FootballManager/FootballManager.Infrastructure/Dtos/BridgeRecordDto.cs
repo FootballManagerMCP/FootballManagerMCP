@@ -6,6 +6,9 @@ namespace FootballManager.Infrastructure.Dtos;
 /// </summary>
 internal sealed class BridgeRecordDto<TValues> where TValues : new()
 {
+    /// <summary>The record read, e.g. the player of a squad row.</summary>
+    public BridgeReferenceDto? Source { get; set; }
+
     public TValues Values { get; set; } = new();
     public List<string>? Pending { get; set; }
     public Dictionary<string, string>? Errors { get; set; }
