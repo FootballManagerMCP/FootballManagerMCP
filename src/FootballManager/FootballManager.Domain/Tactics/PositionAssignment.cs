@@ -4,6 +4,10 @@ namespace FootballManager.Domain.Tactics;
 public class PositionAssignment
 {
     public TacticalPosition? Position { get; set; }
+
+    /// <summary>The role's key, the game's English identifier (e.g. "CentreForward"), as tactic edits take it.</summary>
+    public string? RoleKey { get; set; }
+
     public string? Role { get; set; }
     public string? RoleShortName { get; set; }
 

@@ -32,6 +32,10 @@ internal sealed class BridgeTacticOverviewDto
     [JsonPropertyName(TacticConstants.Mentality)]
     public string? Mentality { get; set; }
 
+    /// <summary>The mentality's id (FM.UI.TacticMentalities).</summary>
+    [JsonPropertyName(TacticConstants.MentalityValue)]
+    public long? MentalityId { get; set; }
+
     [JsonPropertyName(TacticConstants.Style)]
     public BridgeOptionDto? Style { get; set; }
 

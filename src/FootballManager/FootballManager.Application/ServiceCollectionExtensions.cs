@@ -9,6 +9,7 @@ public static class ServiceCollectionExtensions
     {
         services.AddScoped<ISquadService, SquadService>();
         services.AddScoped<ITacticsService, TacticsService>();
+        services.AddScoped<ITacticEditingService, TacticEditingService>();
         services.AddScoped<IMatchesService, MatchesService>();
         return services;
     }

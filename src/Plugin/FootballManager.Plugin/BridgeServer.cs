@@ -4,6 +4,7 @@ using System.Text;
 using BepInEx.Logging;
 using FootballManager.Plugin.Data;
 using FootballManager.Plugin.Inspection;
+using FootballManager.Plugin.Writes;
 
 namespace FootballManager.Plugin;
 
@@ -60,9 +61,18 @@ internal sealed class BridgeServer(int port, ManualLogSource log) : IDisposable
             if (route is null)
             {
                 reply = Reply.Text(404, "Unknown endpoint. Try /status, /ui, /find?text=, /table, /catalog?set=property|reference|context, "
-                    + "/bindings?path=&depth=, /schema?type=person|team|club, /names?ids=, /squad?props=, /player?index=&props=, "
-                    + "or /get?root=Human&props= with optional base=, list=, itemAs=, index=, each=Name:from:to, ctx=Name:value "
-                    + "and ref=Name:path (both repeatable), contexts=true, debug=true, timeoutMs=.");
+                    + "/bindings?path=&depth=, /schema?type=person|team|club, /names?ids=, /instructions, /player-instructions, "
+                    + "/enums?types=FM.UI.InPossessionRole,..., /squad?props=, "
+                    + "/player?index=&props=, or /get?root=Human&props= with optional base=, list=, itemAs=, index=, "
+                    + "each=Name:from:to, ctx=Name:value and ref=Name:path (both repeatable), contexts=true, debug=true, timeoutMs=. "
+                    + "Writes (confirm=true): /set?<as /get>&path=&value=5|u:5|@Path|@List[Field=value]|@List[Field=value].Field, "
+                    + "/event?<as /get>&type=role|formation|selection|modify&field=Name:<value> (repeatable)&template=none&dryRun=true, "
+                    + "/native?<as /get>&event=EventFmx...&field=Target:<value>&field=Data:<value>|data=<json record>&template=none"
+                    + "&dryRun=true, "
+                    + "/move?index=<0-10>&to=<position mask>|with=<0-10>&inPossession=true|false, "
+                    + "/pick?index=<0-10>&player=<database index> (dryRun=true to only build either). "
+                    + "Recording: /events?start=true[&interop=false][&writes=false][&ui=false][&data=true]|stop=true|clear=true, "
+                    + "read with /events[?stream=data].");
             }
             else
             {
@@ -102,7 +112,16 @@ internal sealed class BridgeServer(int port, ManualLogSource log) : IDisposable
         "/schema" => Json(() => MainThreadDispatcher.RunAsync(
             () => PropertySchema.Describe(query["type"] ?? "person", query["filter"]))),
         "/names" => Text(() => Data.Json.Serialize(IdentifierCatalog.NamesOf(query["ids"])), "application/json; charset=utf-8"),
+        "/instructions" => Text(() => Data.Json.Serialize(TeamInstructionCatalog.Describe()), "application/json; charset=utf-8"),
+        "/player-instructions" => Text(() => Data.Json.Serialize(PlayerInstructionCatalog.Describe()), "application/json; charset=utf-8"),
+        "/enums" => Text(() => Data.Json.Serialize(EnumCatalog.Describe(query["types"])), "application/json; charset=utf-8"),
         "/get" => Json(() => DataQueries.RunAsync(GetQuery(query), AnswerTimeout(query), query["debug"] == "true")),
+        "/set" => Json(() => SetAsync(query)),
+        "/event" => Json(() => SendEventAsync(query)),
+        "/native" => Json(() => SendNativeEventAsync(query)),
+        "/move" => Json(() => MoveAsync(query)),
+        "/pick" => Json(() => PickAsync(query)),
+        "/events" => Text(() => Events(query), "application/json; charset=utf-8"),
         "/squad" => Json(() => DataQueries.RunAsync(SquadQuery(query, null), AnswerTimeout(query), query["debug"] == "true")),
         "/player" => Json(() => DataQueries.RunAsync(
             SquadQuery(query, ParseInt(query["index"], 0)), AnswerTimeout(query), query["debug"] == "true")),
@@ -122,6 +141,137 @@ internal sealed class BridgeServer(int port, ManualLogSource log) : IDisposable
             Contexts: (query.GetValues("ctx") ?? []).Select(ContextLiteral.Parse).ToList(),
             ContextPaths: (query.GetValues("ref") ?? []).Select(ContextPath.Parse).ToList(),
             WithHumanAndTeam: query["contexts"] == "true");
+    }
+
+    private static async Task<string> SetAsync(NameValueCollection query)
+    {
+        var path = NullIfEmpty(query["path"]) ?? throw new ArgumentException("Name the property to set: path=MentalityDropdown.");
+        var value = NullIfEmpty(query["value"]) ?? throw new ArgumentException("Give the value: value=5, value=@Path or value=@List[Field=value].");
+        var timeout = AnswerTimeout(query);
+
+        await WriteGuard.EnsureAllowedAsync(query["confirm"] == "true", timeout);
+        return await PropertyWriter.SetAsync(GetQuery(query), path, ValueSource.Parse(path, value), timeout);
+    }
+
+    private static async Task<string> SendEventAsync(NameValueCollection query)
+    {
+        var type = NullIfEmpty(query["type"]) ?? throw new ArgumentException($"Name the event: type={string.Join("|", EventSender.Types)}.");
+        var timeout = AnswerTimeout(query);
+        var fields = Fields(query);
+        var send = query["dryRun"] != "true";
+
+        if (send)
+        {
+            await WriteGuard.EnsureAllowedAsync(query["confirm"] == "true", timeout);
+        }
+
+        return await EventSender.SendAsync(GetQuery(query), type, fields, query["template"] != "none", send, timeout);
+    }
+
+    private static async Task<string> SendNativeEventAsync(NameValueCollection query)
+    {
+        var name = NullIfEmpty(query["event"]) ?? throw new ArgumentException("Name the native event as /events shows it: event=EventFmxChangeFormation.");
+        var timeout = AnswerTimeout(query);
+        var fields = Fields(query);
+        var send = query["dryRun"] != "true";
+
+        if (send)
+        {
+            await WriteGuard.EnsureAllowedAsync(query["confirm"] == "true", timeout);
+        }
+
+        return await NativeEventSender.SendAsync(
+            GetQuery(query), name, fields, NullIfEmpty(query["data"]), query["template"] != "none", send, timeout);
+    }
+
+    private static async Task<string> MoveAsync(NameValueCollection query)
+    {
+        var index = ParseOptionalInt(query["index"]) ?? throw new ArgumentException("Name the lineup position to move: index=0-10.");
+        var to = NullIfEmpty(query["to"]) is { } mask
+            ? uint.TryParse(mask, out var parsed) ? parsed : throw new ArgumentException($"to is a position mask (a number), got '{mask}'.")
+            : (uint?)null;
+        var inPossession = query["inPossession"] != "false";
+        var send = query["dryRun"] != "true";
+        var timeout = AnswerTimeout(query);
+
+        if (send)
+        {
+            await WriteGuard.EnsureAllowedAsync(query["confirm"] == "true", timeout);
+        }
+
+        return await LineupMover.MoveAsync(index, to, ParseOptionalInt(query["with"]), inPossession, send, timeout);
+    }
+
+    private static async Task<string> PickAsync(NameValueCollection query)
+    {
+        var index = ParseOptionalInt(query["index"]) ?? throw new ArgumentException("Name the lineup position to fill: index=0-10.");
+        var player = ParseOptionalInt(query["player"]) ?? throw new ArgumentException("Name the player by database index: player=102220.");
+        var send = query["dryRun"] != "true";
+        var timeout = AnswerTimeout(query);
+
+        if (send)
+        {
+            await WriteGuard.EnsureAllowedAsync(query["confirm"] == "true", timeout);
+        }
+
+        return await LineupPicker.PickAsync(index, player, send, timeout);
+    }
+
+    private static int? ParseOptionalInt(string? value)
+    {
+        return NullIfEmpty(value) is { } text
+            ? int.TryParse(text, out var parsed) ? parsed : throw new ArgumentException($"Expected a whole number, got '{text}'.")
+            : null;
+    }
+
+    // Repeatable field=Name:value, each value a literal, @Path or @List[Field=value].
+    private static Dictionary<string, ValueSource> Fields(NameValueCollection query)
+    {
+        var fields = new Dictionary<string, ValueSource>();
+
+        foreach (var field in query.GetValues("field") ?? [])
+        {
+            var separator = field.IndexOf(':');
+
+            if (separator <= 0)
+            {
+                throw new ArgumentException($"A field is Name:value, got '{field}'.");
+            }
+
+            var name = field[..separator];
+            fields[name] = ValueSource.Parse(name, field[(separator + 1)..]);
+        }
+
+        return fields;
+    }
+
+    private static string Events(NameValueCollection query)
+    {
+        var options = new RecorderOptions(
+            Interop: query["interop"] != "false",
+            Writes: query["writes"] != "false",
+            Ui: query["ui"] != "false",
+            Data: query["data"] == "true");
+
+        var status = query["start"] == "true" ? EventRecorder.Start(options)
+            : query["stop"] == "true" ? EventRecorder.Stop()
+            : null;
+
+        if (query["clear"] == "true")
+        {
+            EventRecorder.Clear();
+        }
+
+        var dataStream = query["stream"] == "data";
+
+        return Data.Json.Serialize(new Dictionary<string, object?>
+        {
+            ["recording"] = EventRecorder.IsRecording,
+            ["status"] = status,
+            ["stream"] = dataStream ? "data" : "events",
+            ["dataCount"] = EventRecorder.DataCount,
+            ["events"] = dataStream ? EventRecorder.DescribeData() : EventRecorder.Describe()
+        });
     }
 
     // The user's first-team players, one row each.

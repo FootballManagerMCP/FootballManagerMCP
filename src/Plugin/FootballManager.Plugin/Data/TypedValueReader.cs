@@ -17,14 +17,26 @@ namespace FootballManager.Plugin.Data;
 // and only enums go through the game's own AsString (called on the TypedValue, which is a class).
 internal static class TypedValueReader
 {
-    // Deep enough for a list of rows holding scored sub-records (a player's best positions in a tactic).
-    private const int MaxDepth = 5;
+    // Deep enough for the formation picker's tree (categories, then formations, each a row record) and for rows
+    // holding scored sub-records (a player's best positions in a tactic).
+    private const int MaxDepth = 7;
     private const int MaxListItems = 200;
+
+    // How many levels of nested rows a tree capture goes down (the preset picker has three: Config., style, preset).
+    public const int MaxTreeDepth = 5;
+
+    private const int CompactDepth = 2;
 
     // Main thread only, like everything that reads game values.
     private static readonly Dictionary<IntPtr, int> NumberOffsets = [];
 
-    public static object? Read(TypedValue? value, int depth = 0)
+    // A shallow read for values seen in bulk (the screens' data traffic): records and lists show only their top level.
+    public static object? ReadCompact(TypedValue? value)
+    {
+        return Read(value, 0, CompactDepth);
+    }
+
+    public static object? Read(TypedValue? value, int depth = 0, int maxDepth = MaxDepth)
     {
         if (value is null)
         {
@@ -38,7 +50,7 @@ internal static class TypedValueReader
             return ReadNumber(NumberOf(numeric));
         }
 
-        return ReadContent(ContentOf(value), value, depth);
+        return ReadContent(ContentOf(value), value, depth, maxDepth);
     }
 
     // The interop accessor for TypedValue<DynamicNumber>.m_value reads the object header instead of the field, so the
@@ -63,9 +75,82 @@ internal static class TypedValueReader
         return *(DynamicNumber*)((byte*)numeric.Pointer + offset);
     }
 
+    public static DynamicNumber.NumberKind NumberKindOf(NumericTypedValue numeric)
+    {
+        return NumberOf(numeric)._Kind_k__BackingField;
+    }
+
     public static TypedValueList? AsList(TypedValue? value)
     {
         return value is null ? null : ContentOf(value)?.TryCast<TypedValueList>();
+    }
+
+    // The fields of a record value (a dropdown row, a DynamicReference), or null for anything else. Numbers are
+    // skipped: their content isn't read through Get() (see NumberOf).
+    public static Record? AsRecord(TypedValue? value)
+    {
+        return value is null || value.TryCast<NumericTypedValue>() is not null ? null : ContentOf(value)?.TryCast<Record>();
+    }
+
+    // A field of a record value by property name (e.g. a dropdown row's RowData), or null if it has none.
+    public static TypedValue? Field(TypedValue? value, string name)
+    {
+        var record = AsRecord(value);
+        var id = IdentifierCatalog.TryIdOf(name);
+        return record is not null && id is { } key && record.ContainsKey(key) ? record[key] : null;
+    }
+
+    // The database index of the record a value refers to (a person's, as dropdown rows give it as Index), or null.
+    public static int? DatabaseIndexOf(TypedValue? value)
+    {
+        return AsReference(value)?.TryCast<DatabaseRecordReference>()?.m_index;
+    }
+
+    // The rows one level down from a tree row: the items of every list among its fields (a row keeps its children in a
+    // field like ChildList), looking through nested records but not into the lists' items, which are the next level.
+    public static List<TypedValue> ChildRows(TypedValue row)
+    {
+        var children = new List<TypedValue>();
+
+        if (row.TryCast<NumericTypedValue>() is null)
+        {
+            CollectChildRows(ContentOf(row)?.TryCast<Record>(), children, 0);
+        }
+
+        return children;
+    }
+
+    private static void CollectChildRows(Record? fields, List<TypedValue> children, int depth)
+    {
+        if (fields is null || depth >= MaxDepth)
+        {
+            return;
+        }
+
+        foreach (var pair in fields)
+        {
+            var value = pair.Value;
+
+            // Numbers hold no rows, and their content isn't read through Get() (see NumberOf).
+            if (value is null || value.TryCast<NumericTypedValue>() is not null)
+            {
+                continue;
+            }
+
+            var content = ContentOf(value);
+            var list = content?.TryCast<TypedValueList>();
+
+            if (list is null)
+            {
+                CollectChildRows(content?.TryCast<Record>(), children, depth + 1);
+                continue;
+            }
+
+            for (var i = 0; i < list.Count; i++)
+            {
+                children.Add(list[i]);
+            }
+        }
     }
 
     private static Il2CppObject? ContentOf(TypedValue value)
@@ -85,7 +170,7 @@ internal static class TypedValueReader
         };
     }
 
-    private static object? ReadContent(Il2CppObject? content, TypedValue owner, int depth)
+    private static object? ReadContent(Il2CppObject? content, TypedValue owner, int depth, int maxDepth)
     {
         if (content is null)
         {
@@ -143,14 +228,14 @@ internal static class TypedValueReader
 
         if (list is not null)
         {
-            return ReadList(list, depth);
+            return ReadList(list, depth, maxDepth);
         }
 
         var fields = content.TryCast<Record>();
 
         if (fields is not null)
         {
-            return ReadRecord(fields, depth);
+            return ReadRecord(fields, depth, maxDepth);
         }
 
         return new Dictionary<string, object?> { ["$type"] = type.FullName };
@@ -165,7 +250,13 @@ internal static class TypedValueReader
         return new System.DateTime(ticks).ToString("yyyy-MM-dd");
     }
 
-    private static Dictionary<string, object?> ReadReference(InteropReference reference)
+    /// <summary>The game record a value refers to (a tactic, a team), or null if it holds something else.</summary>
+    public static InteropReference? AsReference(TypedValue? value)
+    {
+        return value is null ? null : ContentOf(value)?.TryCast<InteropReference>();
+    }
+
+    public static Dictionary<string, object?> ReadReference(InteropReference reference)
     {
         var typeName = reference.GetIl2CppType().Name;
         var result = new Dictionary<string, object?>
@@ -198,11 +289,11 @@ internal static class TypedValueReader
         return result;
     }
 
-    private static object ReadList(TypedValueList list, int depth)
+    private static object ReadList(TypedValueList list, int depth, int maxDepth)
     {
         var count = list.Count;
 
-        if (depth >= MaxDepth)
+        if (depth >= maxDepth)
         {
             return new Dictionary<string, object?> { ["$count"] = count };
         }
@@ -211,7 +302,7 @@ internal static class TypedValueReader
 
         for (var i = 0; i < Math.Min(count, MaxListItems); i++)
         {
-            items.Add(Read(list[i], depth + 1));
+            items.Add(Read(list[i], depth + 1, maxDepth));
         }
 
         return count <= MaxListItems ? items : new Dictionary<string, object?> { ["$count"] = count, ["items"] = items };
@@ -219,9 +310,9 @@ internal static class TypedValueReader
 
     // The records the game builds for its screens (DynamicReference: a dropdown option, a table row) are plain maps of
     // property id to value.
-    private static Dictionary<string, object?> ReadRecord(Record fields, int depth)
+    private static Dictionary<string, object?> ReadRecord(Record fields, int depth, int maxDepth)
     {
-        if (depth >= MaxDepth)
+        if (depth >= maxDepth)
         {
             return new Dictionary<string, object?> { ["$fields"] = fields.Count };
         }
@@ -230,7 +321,7 @@ internal static class TypedValueReader
 
         foreach (var pair in fields)
         {
-            result[IdentifierCatalog.NameOf(pair.Key)] = Read(pair.Value, depth + 1);
+            result[IdentifierCatalog.NameOf(pair.Key)] = Read(pair.Value, depth + 1, maxDepth);
         }
 
         return result;

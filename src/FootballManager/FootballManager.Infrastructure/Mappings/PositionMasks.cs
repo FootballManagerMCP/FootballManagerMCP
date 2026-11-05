@@ -23,6 +23,17 @@ internal static class PositionMasks
         return 1UL << Array.IndexOf(ByBit, position);
     }
 
+    /// <summary>The mask of a slot, side included, as the game moves a slot to it.</summary>
+    public static ulong Of(TacticalPosition position)
+    {
+        return Of(position.Position) | position.Side switch
+        {
+            PositionSide.Left => LeftOfCentre,
+            PositionSide.Right => RightOfCentre,
+            _ => 0
+        };
+    }
+
     /// <summary>The position alone, without the side bits (what role tables are keyed by).</summary>
     public static ulong WithoutSide(ulong mask)
     {

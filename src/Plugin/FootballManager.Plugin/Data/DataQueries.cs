@@ -41,6 +41,20 @@ internal static class DataQueries
         return Json.Serialize(new Dictionary<string, object?> { ["count"] = rows.Count, ["items"] = rows });
     }
 
+    // The one record a write acts on (the query's base, or its root) with the contexts to pass, copied so it stays
+    // valid across the frames the write takes.
+    public static async Task<(TypedValue Source, List<RequestContext> Contexts)> ResolveSourceAsync(DataQuery query, TimeSpan timeout)
+    {
+        var pathContexts = await ResolveContextPathsAsync(query, timeout);
+        var (record, _) = await ResolveAsync(query, pathContexts, timeout);
+
+        return await MainThreadDispatcher.RunAsync(() =>
+        {
+            var source = record ?? RootValue(query.Root) ?? throw new InvalidOperationException("The source record has no value yet.");
+            return (TypedValue.CreateCopyFrom(source), Contexts(query, pathContexts));
+        });
+    }
+
     private static async Task<List<RequestContext>> ResolveContextPathsAsync(DataQuery query, TimeSpan timeout)
     {
         if (query.ContextPaths is not { Count: > 0 } contextPaths)

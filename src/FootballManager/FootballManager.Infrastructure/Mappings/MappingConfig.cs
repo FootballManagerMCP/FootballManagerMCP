@@ -2,11 +2,13 @@ using System.Globalization;
 using FootballManager.Domain.Matches;
 using FootballManager.Domain.Players;
 using FootballManager.Domain.Tactics;
+using FootballManager.Domain.Tactics.Editing;
 using FootballManager.Domain.Tactics.Effectiveness;
 using FootballManager.Infrastructure.Constants;
 using FootballManager.Infrastructure.Dtos.Matches;
 using FootballManager.Infrastructure.Dtos.Players;
 using FootballManager.Infrastructure.Dtos.Tactics;
+using FootballManager.Infrastructure.Dtos.Tactics.Editing;
 using FootballManager.Infrastructure.Dtos.Tactics.Effectiveness;
 using Mapster;
 
@@ -14,6 +16,9 @@ namespace FootballManager.Infrastructure.Mappings;
 
 public class MappingConfig
 {
+    /// <summary>The Mapster parameter giving a phase's role names by mask, for a role's key (TacticKeys.Roles).</summary>
+    public const string RoleKeysParameter = "roleKeys";
+
     public void Register(TypeAdapterConfig config)
     {
         config.NewConfig<BridgePlayerDto, Player>()
@@ -137,14 +142,49 @@ public class MappingConfig
             .Map(dest => dest.Overall, src => src.OverallEffectiveness)
             .Map(dest => dest.Advice, src => src.AdviceForComponent);
 
+        // A role's key needs the phase's role names (TacticKeys.Roles), passed as RoleKeysParameter.
         config.NewConfig<BridgeRoleRowDto, RoleRating>()
+            .Map(dest => dest.Key, src => RoleKey(src.TacticsRoleId))
             .Map(dest => dest.Role, src => src.TacticsRoleName ?? string.Empty)
             .Map(dest => dest.Rating, src => src.CurrentAbilityStars);
+
+        RegisterTacticEditing(config);
 
         // Index and position label come from the slot's position list, not the player.
         config.NewConfig<BridgeSlotPlayerDto, SlotPosition>()
             .Map(dest => dest.PlayerId, src => src.Id)
             .Map(dest => dest.PlayerName, src => src.Name)
             .Ignore(dest => dest.Index, dest => dest.InPossession!);
+    }
+
+    // The tactics screen's catalogs, as tactic edits name things: the game's identifiers as keys, its labels as labels.
+    private static void RegisterTacticEditing(TypeAdapterConfig config)
+    {
+        config.NewConfig<BridgeInstructionOptionDto, TacticOption>()
+            .MapWith(src => new TacticOption(src.Option ?? string.Empty, src.Name));
+
+        // The option the tactic holds comes from the tactic, not the catalog.
+        config.NewConfig<BridgeTeamInstructionDto, TeamInstructionOptions>()
+            .Map(dest => dest.Key, src => src.Instruction ?? string.Empty)
+            .Map(dest => dest.Label, src => src.Name)
+            .Ignore(dest => dest.Current!);
+
+        config.NewConfig<BridgePlayerInstructionGroupDto, PlayerInstructionGroup>()
+            .Map(dest => dest.Key, src => src.Group ?? string.Empty)
+            .Map(dest => dest.Label, src => src.Name)
+            .Map(dest => dest.InPossession, src => !TacticConstants.OutOfPossessionInstructionGroups.Contains(src.Group))
+            .Map(dest => dest.Options, src => src.Options
+                .Where(option => option.Option != null)
+                .Select(option => new TacticOption(TacticKeys.PlayerInstructionKey(option.Option!), option.Name))
+                .ToList());
+    }
+
+    private static string? RoleKey(ulong? mask)
+    {
+        return mask is { } role
+               && MapContext.Current?.Parameters.TryGetValue(RoleKeysParameter, out var names) == true
+               && names is IReadOnlyDictionary<ulong, string> keys
+            ? keys.GetValueOrDefault(role)
+            : null;
     }
 }

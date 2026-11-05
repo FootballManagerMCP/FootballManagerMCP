@@ -1,9 +1,11 @@
+using FootballManager.Api.Requests.Tactics.Editing;
 using FootballManager.Api.Responses.Matches;
 using FootballManager.Api.Responses.Players;
 using FootballManager.Api.Responses.Tactics.Effectiveness;
 using FootballManager.Domain.Matches;
 using FootballManager.Domain.Players;
 using FootballManager.Domain.Tactics;
+using FootballManager.Domain.Tactics.Editing;
 using FootballManager.Domain.Tactics.Effectiveness;
 using Mapster;
 
@@ -29,6 +31,11 @@ public class MappingConfig
 
         config.NewConfig<TacticalEffectiveness, TacticalEffectivenessResponse>()
             .Map(dest => dest.Warnings, src => src.Warnings.Count > 0 ? src.Warnings : null);
+
+        // A request leaves out what it doesn't change; an edit takes that as nothing to change.
+        config.NewConfig<SetTacticRequest, TacticChanges>()
+            .Map(dest => dest.TeamInstructions, src => src.TeamInstructions ?? new Dictionary<string, string>())
+            .Map(dest => dest.Lineup, src => src.Lineup ?? new List<LineupChangeRequest>());
 
         RegisterMatches(config);
     }

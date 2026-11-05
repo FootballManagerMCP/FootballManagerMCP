@@ -4,7 +4,10 @@ using SI.Core;
 namespace FootballManager.Plugin.Data;
 
 // A context given in a query as Name:value. The value's type follows its text: true/false, a whole number, or text
-// (put it in single quotes to force text, e.g. format:'[%date#1]').
+// (put it in single quotes to force text, e.g. format:'[%date#1]'). A whole number is the narrowest signed type that
+// holds it; "u:2048" makes it unsigned and "l:2048" a long, for values the game holds that way (role and position masks
+// are unsigned). An unsigned value is a UInt32 when it fits and a UInt64 past that (out-of-possession role masks use
+// the high bits).
 internal sealed record ContextLiteral(string Name, object Value)
 {
     public static ContextLiteral Parse(string text)
@@ -29,6 +32,16 @@ internal sealed record ContextLiteral(string Name, object Value)
             return new ContextLiteral(name, flag);
         }
 
+        if (raw.StartsWith("u:") && ulong.TryParse(raw[2..], NumberStyles.None, CultureInfo.InvariantCulture, out var unsigned))
+        {
+            return new ContextLiteral(name, unsigned <= uint.MaxValue ? (uint)unsigned : unsigned);
+        }
+
+        if (raw.StartsWith("l:") && long.TryParse(raw[2..], NumberStyles.Integer, CultureInfo.InvariantCulture, out var wide))
+        {
+            return new ContextLiteral(name, wide);
+        }
+
         if (long.TryParse(raw, NumberStyles.Integer, CultureInfo.InvariantCulture, out var number))
         {
             return new ContextLiteral(name, Narrowest(number));
@@ -45,6 +58,7 @@ internal sealed record ContextLiteral(string Name, object Value)
             bool flag => TypedValue.Create(flag),
             int number => TypedValue.Create(number),
             uint number => TypedValue.Create(number),
+            ulong number => TypedValue.Create(number),
             long number => TypedValue.Create(number),
             string text => TypedValue.Create(text),
             _ => throw new InvalidOperationException($"Unsupported context value for '{Name}'.")

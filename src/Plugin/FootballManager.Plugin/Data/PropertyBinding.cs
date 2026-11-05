@@ -12,6 +12,9 @@ internal sealed class PropertyBinding(string path, PropertyCapture capture)
 
     public Bindings.Key Key { get; set; }
 
+    // The node the value arrived on, which is the one a write must target (not the key the request returned).
+    public Bindings.Key ValueKey { get; private set; }
+
     // Kept referenced for the binding's lifetime: the game holds only the IL2CPP side of the delegate.
     public Bindings.ValueChangedCallback? Callback { get; set; }
 
@@ -28,6 +31,9 @@ internal sealed class PropertyBinding(string path, PropertyCapture capture)
 
     public List<TypedValue>? CapturedItems { get; private set; }
 
+    // Rows top level first, then each level below, decoded when they arrived.
+    public List<(TypedValue Row, object? Decoded)>? CapturedTree { get; private set; }
+
     public string? Error { get; set; }
 
     // Called from inside the game's binding update: an exception escaping into native code would take the game down.
@@ -37,6 +43,7 @@ internal sealed class PropertyBinding(string path, PropertyCapture capture)
         {
             CallbackCount++;
             LastCallbackUtc = DateTime.UtcNow;
+            ValueKey = key;
             Value = TypedValueReader.Read(value);
 
             if (capture == PropertyCapture.Value)
@@ -46,6 +53,10 @@ internal sealed class PropertyBinding(string path, PropertyCapture capture)
             else if (capture == PropertyCapture.Items)
             {
                 CapturedItems = CopyItems(value);
+            }
+            else if (capture == PropertyCapture.Tree)
+            {
+                CapturedTree = CopyTree(value);
             }
 
             Received = true;
@@ -73,5 +84,38 @@ internal sealed class PropertyBinding(string path, PropertyCapture capture)
         }
 
         return copies;
+    }
+
+    private static List<(TypedValue Row, object? Decoded)>? CopyTree(TypedValue value)
+    {
+        var list = TypedValueReader.AsList(value);
+
+        if (list is null)
+        {
+            return null;
+        }
+
+        var rows = new List<(TypedValue Row, object? Decoded)>();
+        var level = new List<TypedValue>();
+
+        for (var i = 0; i < list.Count; i++)
+        {
+            level.Add(list[i]);
+        }
+
+        for (var depth = 0; level.Count > 0 && depth < TypedValueReader.MaxTreeDepth; depth++)
+        {
+            var next = new List<TypedValue>();
+
+            foreach (var row in level)
+            {
+                rows.Add((TypedValue.CreateCopyFrom(row), TypedValueReader.Read(row)));
+                next.AddRange(TypedValueReader.ChildRows(row));
+            }
+
+            level = next;
+        }
+
+        return rows;
     }
 }

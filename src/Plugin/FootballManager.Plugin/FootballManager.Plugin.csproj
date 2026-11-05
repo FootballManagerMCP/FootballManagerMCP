@@ -27,6 +27,11 @@
       <HintPath>$(BepInExDir)\core\Il2CppInterop.Runtime.dll</HintPath>
       <Private>false</Private>
     </Reference>
+    <!-- HarmonyX; BepInEx sets up its IL2CPP support, so patches on interop methods reach the game's native code. -->
+    <Reference Include="0Harmony">
+      <HintPath>$(BepInExDir)\core\0Harmony.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
     <Reference Include="Il2Cppmscorlib">
       <HintPath>$(BepInExDir)\interop\Il2Cppmscorlib.dll</HintPath>
       <Private>false</Private>
@@ -65,6 +70,10 @@
     </Reference>
     <Reference Include="FM.GamePlugin">
       <HintPath>$(BepInExDir)\interop\FM.GamePlugin.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="SI.Marshalling">
+      <HintPath>$(BepInExDir)\interop\SI.Marshalling.dll</HintPath>
       <Private>false</Private>
     </Reference>
   </ItemGroup>

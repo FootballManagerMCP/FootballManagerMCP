@@ -87,7 +87,9 @@ internal sealed class PropertyRequest : IDisposable
 
     // One request per (source, contexts) pair, e.g. one per player, or one per tactic position.
     public static List<PropertyRequest> StartAll(
-        IEnumerable<(TypedValue Source, IReadOnlyList<RequestContext> Contexts)> requestsToStart, IReadOnlyList<string> paths)
+        IEnumerable<(TypedValue Source, IReadOnlyList<RequestContext> Contexts)> requestsToStart,
+        IReadOnlyList<string> paths,
+        IReadOnlyDictionary<string, PropertyCapture>? captures = null)
     {
         var requests = new List<PropertyRequest>();
 
@@ -95,7 +97,7 @@ internal sealed class PropertyRequest : IDisposable
         {
             foreach (var (source, contexts) in requestsToStart)
             {
-                requests.Add(Start(source, paths, contexts));
+                requests.Add(Start(source, paths, contexts, captures));
             }
         }
         catch
@@ -117,6 +119,21 @@ internal sealed class PropertyRequest : IDisposable
         {
             Dispose();
         }
+    }
+
+    public IReadOnlyList<PropertyBinding> PathBindings => _bindingsByPath;
+
+    // Writes a value the way the game's own dropdowns do: onto the node the value came in on, flagged so the binding
+    // tree hands it back to the data handler that serves it, which passes it on to the native game.
+    public void Write(PropertyBinding binding, TypedValue value)
+    {
+        if (!binding.Received)
+        {
+            throw new InvalidOperationException($"'{binding.Path}' hasn't been answered yet, so there's nothing to write to.");
+        }
+
+        var key = binding.ValueKey;
+        _bindings.Set(ref key, value, Bindings.SetFlags.UpdateHandler);
     }
 
     // The bindings with whatever they captured, which stays valid once this request is gone.

@@ -7,6 +7,9 @@ namespace FootballManager.Infrastructure.Clients;
 // (a list's items and/or a range of context values), the contexts to pass, and the property paths to read.
 internal sealed class BridgeQuery
 {
+    // A write reads the value before and after, a few frames each.
+    private const string WriteTimeoutMs = "8000";
+
     private readonly List<(string Name, string Value)> _parameters = [];
     private readonly List<string> _paths = [];
 
@@ -18,6 +21,16 @@ internal sealed class BridgeQuery
     public static BridgeQuery FromHuman()
     {
         return new BridgeQuery(GameConstants.HumanRoot);
+    }
+
+    /// <summary>
+    /// The tactic the team plays. Reads pass the user's manager and team as contexts, like the game's screens; writes
+    /// don't, like the tactics screen's controls.
+    /// </summary>
+    public static BridgeQuery OnActiveTactic(bool forWrite = false)
+    {
+        var query = FromHuman().Base(TacticConstants.Tactic).Context(TacticConstants.TacticFlag, true);
+        return forWrite ? query : query.WithHumanAndTeam();
     }
 
     public BridgeQuery Base(string path) => Add("base", path);
@@ -53,11 +66,27 @@ internal sealed class BridgeQuery
 
     public override string ToString()
     {
-        var parameters = _parameters
-            .Append((Name: "props", Value: string.Join(',', _paths)))
-            .Select(p => $"{p.Name}={Uri.EscapeDataString(p.Value)}");
+        return Url("/get", _parameters.Append((Name: "props", Value: string.Join(',', _paths))));
+    }
 
-        return $"/get?{string.Join('&', parameters)}";
+    /// <summary>
+    /// A write to the record this query reads, with its contexts: the plugin's /set (path, value) or /native (event,
+    /// field). Writes are confirmed here: the caller has the user's agreement by the time it writes.
+    /// </summary>
+    public string ToWrite(string endpoint, params (string Name, string Value)[] parameters)
+    {
+        return Write(endpoint, [.. _parameters, .. parameters]);
+    }
+
+    /// <summary>A write that takes no record, e.g. the plugin's /move or /pick.</summary>
+    public static string Write(string endpoint, IEnumerable<(string Name, string Value)> parameters)
+    {
+        return Url(endpoint, parameters.Append(("confirm", "true")).Append(("timeoutMs", WriteTimeoutMs)));
+    }
+
+    private static string Url(string endpoint, IEnumerable<(string Name, string Value)> parameters)
+    {
+        return $"{endpoint}?{string.Join('&', parameters.Select(p => $"{p.Name}={Uri.EscapeDataString(p.Value)}"))}";
     }
 
     private BridgeQuery Add(string name, string value)

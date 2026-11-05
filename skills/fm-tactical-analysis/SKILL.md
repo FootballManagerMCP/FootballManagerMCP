@@ -1,12 +1,13 @@
 ---
 name: fm-tactical-analysis
-description: Analyse the user's Football Manager 27 tactics against their squad and their results, using the football-manager MCP tools (get_tactics, get_role_fit, get_squad, get_matches, get_match). Use when the user asks to review, assess or improve their tactics, whether a tactic suits their players, which of their tactic slots to use, who should play where or in which role, or why a tactic isn't working.
+description: Analyse the user's Football Manager 27 tactics against their squad and their results, and build or change a tactic in the game, using the football-manager MCP tools (get_tactics, get_role_fit, get_squad, get_matches, get_match, get_tactic_options, set_tactic). Use when the user asks to review, assess, improve or create a tactic, whether a tactic suits their players, which of their tactic slots to use, who should play where or in which role, why a tactic isn't working, or to set a tactic up for a match.
 ---
 
 # FM tactical analysis
 
-Turn the game's own data into a verdict on the user's tactics and a short list of concrete changes. The tools read the
-live game and change nothing; every change is the user's to make in the game.
+Turn the game's own data into a verdict on the user's tactics and a short list of concrete changes, and, when the user
+wants, write a tactic into the game with `set_tactic`. Every tool reads the live game; only `set_tactic` with
+`apply: true` changes it, and only once the user has agreed to the plan.
 
 ## 1. Gather
 
@@ -65,15 +66,18 @@ passes, chances created, xA) and ask the user what they see in him.
 - Judge a slot's potential by its shape and roles, and by who in the squad could fill them.
 - Don't judge it by the effectiveness of today's eleven alone.
 
-**Languages and position labels**
+**Keys, labels and position codes**
+- Settings and roles come as keys, the game's English identifiers whatever language it runs in (`CentreForward`,
+  `Positive`, `4231DMWide`), next to the game's labels in its display language. Keys are what `set_tactic` takes.
 - Positions in the active lineup use English codes: DCL/DCR are the left/right of a central pair.
-- Role names, advice and slot labels are in the game's language. In French: GB = GK, DD/DG = DR/DL, DC(D/G) = DC(R/L),
-  MDC(D/G) = DM(R/L), MD/MG = MR/ML, MC(D/G) = MC(R/L), MOD/MOG/MOC = AMR/AML/AMC, BTC(D/G) = ST(R/L). D = droite
-  (right), G = gauche (left).
+- Advice and inactive slots' position labels are in the game's language. In French, for example: GB = GK, DD/DG =
+  DR/DL, DC(D/G) = DC(R/L), MDC(D/G) = DM(R/L), MD/MG = MR/ML, MC(D/G) = MC(R/L), MOD/MOG/MOC = AMR/AML/AMC,
+  BTC(D/G) = ST(R/L). D = droite (right), G = gauche (left).
 - Answer in the user's language, quoting the game's role names as the game writes them.
+- Formation keys don't always match the shape the game shows (`343DMWide` is labelled 5-2-3): go by the label.
 
-**Team instructions** use the game's identifiers (`MuchHigherTempo`, `DeeperDefensiveLine`, `DropOff`, ...). Translate
-them into plain football terms.
+**Team instructions** are keyed by the game's identifiers (`Tempo`: `MuchHigherTempo`, `DefensiveLineBehaviour`:
+`DropOff`, ...). Translate them into plain football terms.
 
 ## 3. Analyse
 
@@ -119,5 +123,31 @@ Keep it tight. Use this structure:
 5. **Watch out.** Uncertain data (ranges), hidden information you didn't use, and anything only the user can judge
    (e.g. a player's mood or a planned signing).
 
-Offer to dig into a specific slot, position or player next. Don't run more tools unprompted once the report is
-delivered.
+Offer to dig into a specific slot, position or player next, or to set the changes up in the game. Don't run more
+tools unprompted once the report is delivered.
+
+## 5. Set a tactic up in the game
+
+When the user asks for a tactic to be built or changed in the game:
+
+1. **Pick the slot.** Use slot 2 unless the user names another. If slot 2 holds no tactic, or one the user keeps for
+   themselves, ask which slot to use. Writing a slot makes it the one the team plays, and it stays active.
+2. **Gather what you need.** `get_tactics` for the current state, `get_tactic_options` for the keys (styles,
+   mentalities, each phase's formations, team instructions, player instruction groups), `get_role_fit` for the roles a
+   position offers and who suits them, and `get_squad` for player ids and attributes. Choose players on ability and
+   role fit; condition recovers between matches.
+3. **Dry run.** Call `set_tactic` without `apply`. It checks every key, and every role against the player's role table
+   at the position, and returns the planned steps. A 400 lists what's wrong.
+4. **Show the plan** in plain football terms (shape in each phase, XI with roles and ratings, mentality, instructions),
+   with the effects worth knowing:
+   - A new style resets the mentality and every team instruction to the style's own.
+   - A formation change reshuffles players across slots and resets roles: give the full lineup in the same call.
+   - Bringing players in changes the team's selection, which every slot shares.
+5. **Apply** with `apply: true` once the user agrees. Each step comes back Done, Failed or Skipped; the first failure
+   stops the rest. Fix the cause and send only what's left.
+6. **Check** with `get_tactics` (the game's effectiveness rating of the new slot is a useful verdict), and ask the user
+   to confirm on screen.
+
+Lineup rules: to change who plays, list all eleven, each with a position in both phases; otherwise list only the
+players to change. Player instructions replace a phase's whole list, except groups the role or position locks (a
+defensive midfielder always holds position), which keep their option. Leave out instructions a role already gives.

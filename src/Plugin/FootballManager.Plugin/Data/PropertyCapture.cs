@@ -9,5 +9,9 @@ internal enum PropertyCapture
     Value,
 
     // The items of a list-valued path, e.g. the players a request then runs once for each.
-    Items
+    Items,
+
+    // Every row of a list-valued path, nested ones included (a dropdown's tree: categories, then their options), each
+    // with its decoded fields, to pick one row from.
+    Tree
 }

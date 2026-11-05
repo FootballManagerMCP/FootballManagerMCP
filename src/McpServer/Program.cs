@@ -8,7 +8,8 @@ builder.Logging.ClearProviders();
 builder.Services.AddHttpClient("FootballManagerApi", c =>
 {
     c.BaseAddress = new Uri("http://localhost:5120");
-    c.Timeout = TimeSpan.FromSeconds(90);
+    // A whole tactic written to the game, one write after another, takes up to a minute or two.
+    c.Timeout = TimeSpan.FromMinutes(3);
 });
 
 builder.Services

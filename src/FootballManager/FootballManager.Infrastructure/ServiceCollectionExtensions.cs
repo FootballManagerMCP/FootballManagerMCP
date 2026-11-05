@@ -27,8 +27,11 @@ public static class ServiceCollectionExtensions
         });
 
         services.AddScoped<GameBridge>();
+        services.AddScoped<GameVocabulary>();
+        services.AddScoped<TeamInstructionReader>();
         services.AddScoped<ISquadGameClient, SquadBridgeClient>();
         services.AddScoped<ITacticsGameClient, TacticsBridgeClient>();
+        services.AddScoped<ITacticEditorGameClient, TacticEditorBridgeClient>();
         services.AddScoped<IMatchesGameClient, MatchesBridgeClient>();
 
         var mappingConfig = new MappingConfig();

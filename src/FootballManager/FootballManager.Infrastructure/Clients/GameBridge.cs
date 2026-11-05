@@ -1,3 +1,4 @@
+using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
 using FootballManager.Application.Exceptions;
@@ -60,7 +61,22 @@ internal sealed class GameBridge(IHttpClientFactory httpClientFactory, ILogger<G
             : await GetAsync<Dictionary<string, string?>>($"/names?ids={list}", cancellationToken);
     }
 
-    private async Task<T> GetAsync<T>(string path, CancellationToken cancellationToken)
+    /// <summary>A plugin endpoint whose JSON isn't a record, e.g. /enums or /instructions.</summary>
+    public Task<T> GetJsonAsync<T>(string path, CancellationToken cancellationToken)
+    {
+        return GetAsync<T>(path, cancellationToken);
+    }
+
+    /// <summary>
+    /// A write (see BridgeQuery.ToWrite). The game refusing it, e.g. a player already in the position, throws
+    /// <see cref="GameRejectedException"/> with its reason.
+    /// </summary>
+    public Task<T> WriteAsync<T>(string path, CancellationToken cancellationToken)
+    {
+        return GetAsync<T>(path, cancellationToken, rejectionThrows: true);
+    }
+
+    private async Task<T> GetAsync<T>(string path, CancellationToken cancellationToken, bool rejectionThrows = false)
     {
         var http = httpClientFactory.CreateClient(HttpClientName);
         HttpResponseMessage response;
@@ -84,7 +100,14 @@ internal sealed class GameBridge(IHttpClientFactory httpClientFactory, ILogger<G
         {
             // The plugin answers errors in plain text, its first line being the reason (e.g. no save loaded yet).
             var body = await response.Content.ReadAsStringAsync(cancellationToken);
-            throw new GameUnavailableException($"The game couldn't answer ({(int)response.StatusCode}): {body.Split('\n')[0].Trim()}");
+            var reason = body.Split('\n')[0].Trim();
+
+            if (rejectionThrows && response.StatusCode == HttpStatusCode.BadRequest)
+            {
+                throw new GameRejectedException(reason);
+            }
+
+            throw new GameUnavailableException($"The game couldn't answer ({(int)response.StatusCode}): {reason}");
         }
 
         return await response.Content.ReadFromJsonAsync<T>(JsonOptions, cancellationToken)

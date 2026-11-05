@@ -42,8 +42,8 @@ internal static class TacticConstants
 
     public static readonly string[] Overview =
     [
-        CurrentSlot, Slot1Name, Slot2Name, Slot3Name, Slot1Valid, Slot2Valid, Slot3Valid, Mentality, Style, StyleOptions,
-        RecommendedStyles, .. TeamInstructions
+        CurrentSlot, Slot1Name, Slot2Name, Slot3Name, Slot1Valid, Slot2Valid, Slot3Valid, Mentality, MentalityValue, Style,
+        StyleOptions, RecommendedStyles, .. TeamInstructions
     ];
 
     // A player's roles at a position with their ratings (contexts PositionMask and InPossession, plus human and team).
@@ -83,4 +83,53 @@ internal static class TacticConstants
 
     // A slot's positions with role abbreviations (on a player, contexts HumanTeam and TacticIndex).
     public const string SlotPositions = "TacticalEffectivenessIPPositionsList";
+
+    // Editing the active tactic. Values are the ids the tactics screen's own controls read and write; the plugin's
+    // /set writes them, read without the human and team contexts as the screen's controls do.
+    public const string MentalityValue = "Mentality";
+    public const string MentalityDropdown = "MentalityDropdown";
+    public const string MentalityOptions = "MentalityDropdownOptions";
+    public const string Formation = "Formation";
+    public const string FormationOptions = "AddFormationOptions";
+    public const string PositionRole = "PositionRole";
+
+    // A team instruction's option, by instruction (context TeamInstructionID, the instruction's id in /instructions).
+    public const string TeamInstructionId = "TeamInstructionID";
+    public const string SelectedTeamInstruction = "SelectedTeamInstructionOption";
+    public const int TeamInstructionIdCount = 33;
+
+    // A lineup slot's player instruction, by group (contexts PlayerInstructionGroupID, TeamSelectionIndex, InPossession).
+    public const string PlayerInstructionGroupId = "PlayerInstructionGroupID";
+    public const string SelectedPlayerInstruction = "SelectedPlayerInstruction";
+
+    // True when the slot's role or position sets the group (its option then can't change).
+    public const string PlayerInstructionLocked = "PlayerInstructionGroupIsLocked";
+    public const int PlayerInstructionGroupCount = 17;
+
+    // The groups a player takes out of possession (pressing, marking, tackling); the others are for when the team has
+    // the ball. Each locks in the other phase.
+    public static readonly string[] OutOfPossessionInstructionGroups = ["TriggerPress", "Marking", "Tackling", "MarkingTarget"];
+
+    // Native event switching the active slot; its data is the slot, 0 to 2.
+    public const string SwitchSlotEvent = "EventFmxSetTacticSlot";
+
+    // The game's enums naming what the tactic holds as numbers (the plugin's /enums). Role values are the masks
+    // lineup slots hold; the duty flags and "no role" aren't roles.
+    public const string StylesEnum = "FM.UI.TacticalStyles";
+    public const string MentalitiesEnum = "FM.UI.TacticMentalities";
+    public const string FormationsEnum = "FM.UI.Formation";
+    public const string InPossessionRolesEnum = "FM.UI.InPossessionRole";
+    public const string OutOfPossessionRolesEnum = "FM.UI.OutOfPossessionRole";
+
+    public static readonly string[] Enums =
+    [
+        StylesEnum, MentalitiesEnum, FormationsEnum, InPossessionRolesEnum, OutOfPossessionRolesEnum
+    ];
+
+    // Out-of-possession role names carry this prefix; keys drop it (OPTrackingCentreForward is TrackingCentreForward).
+    public const string OutOfPossessionRolePrefix = "OP";
+    public const string FormationPrefix = "Formation";
+    public const string NoRole = "NoRole";
+    public const string DutySuffix = "Duty";
+    public const string PlayerInstructionPrefix = "PI_";
 }
