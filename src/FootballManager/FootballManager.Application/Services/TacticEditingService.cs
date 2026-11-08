@@ -704,9 +704,22 @@ public class TacticEditingService(ITacticEditorGameClient game) : ITacticEditing
                             continue;
                         }
 
-                        writes.Add(Write(
-                            Step("Player instruction", subject, held, wanted),
-                            async () => (await game.SetPlayerInstructionAsync(index, inPossession, group.Key, wanted, cancellationToken)).After));
+                        var step = Step("Player instruction", subject, held, wanted);
+
+                        // Clearing a group the list doesn't name goes back to the role's default, which some roles
+                        // set (a channel midfielder moves into channels): that's the reset, not a failure.
+                        writes.Add(Write(step, async () =>
+                        {
+                            var after = (await game.SetPlayerInstructionAsync(index, inPossession, group.Key, wanted, cancellationToken)).After;
+
+                            if (asked is not null || after == NoInstruction)
+                            {
+                                return after;
+                            }
+
+                            step.Detail = $"The role keeps {after}.";
+                            return null;
+                        }));
                     }
                 }
             }

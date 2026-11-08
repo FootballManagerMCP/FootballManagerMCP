@@ -62,22 +62,76 @@ internal static class DataQueries
             return [];
         }
 
-        var captures = contextPaths.Select(c => c.Path).Distinct().ToDictionary(path => path, _ => PropertyCapture.Value);
+        // A path through a list item (RecordPaths) is resolved on its own; the plain ones together.
+        var contexts = new Dictionary<string, TypedValue>();
+        var selected = contextPaths.Select(c => c.Path).Where(RecordPaths.HasSelector).Distinct().ToList();
+
+        if (selected.Count > 0)
+        {
+            var literals = await MainThreadDispatcher.RunAsync(() => Contexts(query, []));
+
+            foreach (var path in selected)
+            {
+                contexts[path] = (await ReadAsync(query, literals, path, PropertyCapture.Value, timeout)).Value!;
+            }
+        }
+
+        var plain = contextPaths.Select(c => c.Path).Where(path => !RecordPaths.HasSelector(path)).Distinct().ToList();
+
+        if (plain.Count > 0)
+        {
+            var captures = plain.ToDictionary(path => path, _ => PropertyCapture.Value);
+
+            var bindings = await MainThreadDispatcher.RunAcrossFramesAsync(
+                () => PropertyRequest.Start(RootValue(query.Root), plain, Contexts(query, []), captures),
+                request => request.IsComplete,
+                request => request.FinishWithCaptures(),
+                timeout);
+
+            foreach (var path in plain)
+            {
+                contexts[path] = Captured(bindings, path, "a record").CapturedValue!;
+            }
+        }
+
+        return contextPaths.Select(c => new RequestContext(c.Name, contexts[c.Path])).ToList();
+    }
+
+    // A record (Value) or a list (Items) at a path through list items, from the query's root. The contexts come from
+    // the main thread, like every game value.
+    private static async Task<(TypedValue? Value, List<TypedValue>? Items)> ReadAsync(
+        DataQuery query, IReadOnlyList<RequestContext> contexts, string path, PropertyCapture capture, TimeSpan timeout)
+    {
+        var root = await MainThreadDispatcher.RunAsync(() => RootValue(query.Root) is { } value
+            ? TypedValue.CreateCopyFrom(value)
+            : throw new InvalidOperationException("The source record has no value yet."));
+        var (source, rest) = await RecordPaths.WalkAsync(root, path, contexts, timeout);
+
+        if (rest.Length == 0)
+        {
+            return capture == PropertyCapture.Value
+                ? (source, null)
+                : throw new ArgumentException($"'{path}' ends with a selector, which picks a record, not a list.");
+        }
 
         var bindings = await MainThreadDispatcher.RunAcrossFramesAsync(
-            () => PropertyRequest.Start(RootValue(query.Root), captures.Keys.ToList(), Contexts(query, []), captures),
+            () => PropertyRequest.Start(source, [rest], contexts, new Dictionary<string, PropertyCapture> { [rest] = capture }),
             request => request.IsComplete,
             request => request.FinishWithCaptures(),
             timeout);
 
-        return contextPaths
-            .Select(c => new RequestContext(c.Name, Captured(bindings, c.Path, "a record").CapturedValue!))
-            .ToList();
+        var binding = Captured(bindings, rest, capture == PropertyCapture.Value ? "a record" : "a list");
+        return (binding.CapturedValue, binding.CapturedItems);
     }
 
     private static async Task<(TypedValue? Record, List<TypedValue>? Items)> ResolveAsync(
         DataQuery query, IReadOnlyList<RequestContext> pathContexts, TimeSpan timeout)
     {
+        if (RecordPaths.HasSelector(query.BasePath) || RecordPaths.HasSelector(query.ListPath))
+        {
+            return await ResolveThroughItemsAsync(query, pathContexts, timeout);
+        }
+
         var captures = new Dictionary<string, PropertyCapture>();
 
         if (query.BasePath is not null)
@@ -104,17 +158,38 @@ internal static class DataQueries
         var record = query.BasePath is null ? null : Captured(bindings, query.BasePath, "a record").CapturedValue;
         var items = query.ListPath is null ? null : Captured(bindings, query.ListPath, "a list").CapturedItems;
 
-        if (items is not null && query.Index is not null)
-        {
-            if (query.Index < 0 || query.Index >= items.Count)
-            {
-                throw new ArgumentException($"'{query.ListPath}' has {items.Count} items; index must be 0 to {items.Count - 1}.");
-            }
+        return (record, Indexed(query, items));
+    }
 
-            items = [items[query.Index.Value]];
+    // The base and list one after the other, either of them going through list items.
+    private static async Task<(TypedValue? Record, List<TypedValue>? Items)> ResolveThroughItemsAsync(
+        DataQuery query, IReadOnlyList<RequestContext> pathContexts, TimeSpan timeout)
+    {
+        var contexts = await MainThreadDispatcher.RunAsync(() => Contexts(query, pathContexts));
+
+        var record = query.BasePath is null
+            ? null
+            : (await ReadAsync(query, contexts, query.BasePath, PropertyCapture.Value, timeout)).Value;
+        var items = query.ListPath is null
+            ? null
+            : (await ReadAsync(query, contexts, query.ListPath, PropertyCapture.Items, timeout)).Items;
+
+        return (record, Indexed(query, items));
+    }
+
+    private static List<TypedValue>? Indexed(DataQuery query, List<TypedValue>? items)
+    {
+        if (items is null || query.Index is null)
+        {
+            return items;
         }
 
-        return (record, items);
+        if (query.Index < 0 || query.Index >= items.Count)
+        {
+            throw new ArgumentException($"'{query.ListPath}' has {items.Count} items; index must be 0 to {items.Count - 1}.");
+        }
+
+        return [items[query.Index.Value]];
     }
 
     private static PropertyBinding Captured(IReadOnlyList<PropertyBinding> bindings, string path, string expected)

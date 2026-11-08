@@ -11,6 +11,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<ITacticsService, TacticsService>();
         services.AddScoped<ITacticEditingService, TacticEditingService>();
         services.AddScoped<IMatchesService, MatchesService>();
+        services.AddScoped<ITeamsService, TeamsService>();
         return services;
     }
 }

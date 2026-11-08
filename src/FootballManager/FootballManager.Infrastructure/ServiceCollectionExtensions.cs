@@ -33,6 +33,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<ITacticsGameClient, TacticsBridgeClient>();
         services.AddScoped<ITacticEditorGameClient, TacticEditorBridgeClient>();
         services.AddScoped<IMatchesGameClient, MatchesBridgeClient>();
+        services.AddScoped<ITeamsGameClient, TeamsBridgeClient>();
 
         var mappingConfig = new MappingConfig();
         mappingConfig.Register(TypeAdapterConfig.GlobalSettings);

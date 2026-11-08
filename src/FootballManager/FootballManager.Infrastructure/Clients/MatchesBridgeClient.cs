@@ -15,8 +15,6 @@ namespace FootballManager.Infrastructure.Clients;
 // asked about by its place in the season's fixture list, which the list itself gives.
 internal sealed class MatchesBridgeClient(GameBridge bridge) : IMatchesGameClient
 {
-    private const int StartingEleven = 11;
-
     public async Task<TeamFixtures> GetFixturesAsync(CancellationToken cancellationToken = default)
     {
         var team = TeamAsync(cancellationToken);
@@ -81,10 +79,7 @@ internal sealed class MatchesBridgeClient(GameBridge bridge) : IMatchesGameClien
     {
         return BridgeQuery.FromHuman()
             .List(MatchConstants.FixtureList)
-            .Context(MatchConstants.PreviousAmount, MatchConstants.PreviousMatches)
-            .Context(MatchConstants.FutureAmount, MatchConstants.UpcomingMatches)
-            .Context(MatchConstants.FixturePadding, 0)
-            .Context(MatchConstants.YearIndex, 0)
+            .FixtureWindow()
             .WithHumanAndTeam();
     }
 
@@ -111,17 +106,9 @@ internal sealed class MatchesBridgeClient(GameBridge bridge) : IMatchesGameClien
         {
             var summary = fixture.Values.Adapt<MatchSummary>();
             summary.TeamId = teamId ?? 0;
-            summary.Formation = summary.IsPlayed ? Shape(fixture.Values.Lineup ?? []) : null;
+            summary.Formation = summary.IsPlayed ? LineupShapes.Of(fixture.Values.Lineup ?? []) : null;
             return summary;
         }).ToList();
-    }
-
-    private static string? Shape(IEnumerable<BridgeLineupEntryDto> lineup)
-    {
-        return Formation.Describe(lineup
-            .Where(entry => entry.MatchWasSubbedOn != true && entry.TeamSelectionIndex < StartingEleven)
-            .Select(entry => entry.Position is { } mask ? PositionMasks.ToPosition(mask) : null)
-            .OfType<TacticalPosition>());
     }
 
     // The squad by database index, which is how a match refers to its players, with each one's place in the squad

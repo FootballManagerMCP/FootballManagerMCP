@@ -65,6 +65,7 @@ internal sealed class BridgeServer(int port, ManualLogSource log) : IDisposable
                     + "/enums?types=FM.UI.InPossessionRole,..., /squad?props=, "
                     + "/player?index=&props=, or /get?root=Human&props= with optional base=, list=, itemAs=, index=, "
                     + "each=Name:from:to, ctx=Name:value and ref=Name:path (both repeatable), contexts=true, debug=true, timeoutMs=. "
+                    + "Base, list and ref paths can go through a list's item: Team.Division.TeamList[UniqueId=1556].FixtureList or [3]. "
                     + "Writes (confirm=true): /set?<as /get>&path=&value=5|u:5|@Path|@List[Field=value]|@List[Field=value].Field, "
                     + "/event?<as /get>&type=role|formation|selection|modify&field=Name:<value> (repeatable)&template=none&dryRun=true, "
                     + "/native?<as /get>&event=EventFmx...&field=Target:<value>&field=Data:<value>|data=<json record>&template=none"

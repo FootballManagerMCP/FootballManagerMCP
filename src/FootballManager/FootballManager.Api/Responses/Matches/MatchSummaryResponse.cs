@@ -1,6 +1,6 @@
 namespace FootballManager.Api.Responses.Matches;
 
-/// <summary>A match from the user's side: "for" is the user's team, "against" the opponent.</summary>
+/// <summary>A match from one team's side (the user's, or the team scouted): "for" is that team, "against" the opponent.</summary>
 public class MatchSummaryResponse
 {
     public DateOnly Date { get; set; }
@@ -26,6 +26,9 @@ public class MatchSummaryResponse
     public int? ShotsOnTargetFor { get; set; }
     public int? ShotsOnTargetAgainst { get; set; }
 
-    /// <summary>The shape the user's team lined up in with the ball, e.g. "4-2-2-2".</summary>
+    /// <summary>The shape the team lined up in with the ball, e.g. "4-2-2-2".</summary>
     public string? Formation { get; set; }
+
+    /// <summary>Its shape without the ball, when read (scouted teams), e.g. "4-4-1-1".</summary>
+    public string? OutOfPossessionFormation { get; set; }
 }

@@ -72,6 +72,9 @@ internal sealed class TacticEditorBridgeClient(
 
     public async Task<EditableTactic> GetTacticAsync(CancellationToken cancellationToken = default)
     {
+        // Edits go to the user's current team's tactic: make sure it's theirs (reading another team can switch it).
+        await OwnTeam.RestoreAsync(bridge);
+
         var keys = vocabulary.KeysAsync(cancellationToken);
         var settings = SettingsAsync(cancellationToken);
         var instructions = teamInstructionReader.ReadAsync(cancellationToken);

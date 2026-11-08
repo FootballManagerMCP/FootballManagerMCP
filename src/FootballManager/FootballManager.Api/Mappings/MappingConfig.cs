@@ -1,12 +1,14 @@
 using FootballManager.Api.Requests.Tactics.Editing;
 using FootballManager.Api.Responses.Matches;
 using FootballManager.Api.Responses.Players;
+using FootballManager.Api.Responses.Teams;
 using FootballManager.Api.Responses.Tactics.Effectiveness;
 using FootballManager.Domain.Matches;
 using FootballManager.Domain.Players;
 using FootballManager.Domain.Tactics;
 using FootballManager.Domain.Tactics.Editing;
 using FootballManager.Domain.Tactics.Effectiveness;
+using FootballManager.Domain.Teams;
 using Mapster;
 
 namespace FootballManager.Api.Mappings;
@@ -62,6 +64,8 @@ public class MappingConfig
         Rounded(config.NewConfig<PlayerMatchStats, PlayerMatchStatsResponse>());
         Rounded(config.NewConfig<MatchLineupPlayer, MatchLineupPlayerResponse>());
         Rounded(config.NewConfig<PlayerOfTheMatch, PlayerOfTheMatchResponse>());
+
+        Rounded(config.NewConfig<StyleAverages, StyleAveragesResponse>());
     }
 
     // The game keeps full precision; two decimals is all a reader needs.

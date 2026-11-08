@@ -58,6 +58,15 @@ internal sealed class BridgeQuery
     /// <summary>Passes the user's manager and team as "human" and "team", as the game's own screens do.</summary>
     public BridgeQuery WithHumanAndTeam() => Add("contexts", "true");
 
+    /// <summary>Sizes a fixture list like the game's fixtures screen: the season so far and the next few matches.</summary>
+    public BridgeQuery FixtureWindow()
+    {
+        return Context(MatchConstants.PreviousAmount, MatchConstants.PreviousMatches)
+            .Context(MatchConstants.FutureAmount, MatchConstants.UpcomingMatches)
+            .Context(MatchConstants.FixturePadding, 0)
+            .Context(MatchConstants.YearIndex, 0);
+    }
+
     public BridgeQuery Props(IEnumerable<string> paths)
     {
         _paths.AddRange(paths);

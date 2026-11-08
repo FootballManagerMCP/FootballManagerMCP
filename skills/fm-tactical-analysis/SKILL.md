@@ -1,6 +1,6 @@
 ---
 name: fm-tactical-analysis
-description: Analyse the user's Football Manager 27 tactics against their squad and their results, and build or change a tactic in the game, using the football-manager MCP tools (get_tactics, get_role_fit, get_squad, get_matches, get_match, get_tactic_options, set_tactic). Use when the user asks to review, assess, improve or create a tactic, whether a tactic suits their players, which of their tactic slots to use, who should play where or in which role, why a tactic isn't working, or to set a tactic up for a match.
+description: Analyse the user's Football Manager 27 tactics against their squad, their results and their opponents, and build or change a tactic in the game, using the football-manager MCP tools (get_tactics, get_role_fit, get_squad, get_matches, get_match, get_team, get_tactic_options, set_tactic). Use when the user asks to review, assess, improve or create a tactic, whether a tactic suits their players, which of their tactic slots to use, who should play where or in which role, why a tactic isn't working, how to approach a match or an opponent, or to set a tactic up for a match.
 ---
 
 # FM tactical analysis
@@ -20,7 +20,9 @@ wants, write a tactic into the game with `set_tactic`. Every tool reads the live
    games a tactic was used in.
 3. Call `get_role_fit` only for the positions the first pass flags (step 2). Use one call per position and phase,
    with the base code (`DC` for a DCL slot). Don't call it for every position by reflex.
-4. Call `get_squad` with `includeStats: true` when finishing or creativity is in question (xG overperformance, xG per
+4. Call `get_team` for the opponent when the question is about a coming match (how they play home or away, their
+   shapes and regular starters), or about a result against them.
+5. Call `get_squad` with `includeStats: true` when finishing or creativity is in question (xG overperformance, xG per
    shot, key passes), and with `includeAttributes: true` when a point hinges on attributes, such as pace behind a high
    line, stamina for heavy pressing, or a role's key attributes. Never set `includeHidden` unless the user has
    explicitly agreed in this conversation.
@@ -132,20 +134,31 @@ When the user asks for a tactic to be built or changed in the game:
 
 1. **Pick the slot.** Use slot 2 unless the user names another. If slot 2 holds no tactic, or one the user keeps for
    themselves, ask which slot to use. Writing a slot makes it the one the team plays, and it stays active.
-2. **Gather what you need.** `get_tactics` for the current state, `get_tactic_options` for the keys (styles,
+2. **Scout the opponent first** with `get_team` when the tactic is for a match. Read how they play at the venue in
+   question (`homeStyle` or `awayStyle`):
+   - Their possession and PPDA say whether they'll sit off or press. A low block calls for patience and width; a high
+     press calls for a way through or over it.
+   - What their opponents manage against them (`against`) shows where they're weak, e.g. many crosses conceded.
+   - Their shapes and regular starters show who you'll face where.
+   Don't pick a plan for its own sake: a possession game built to break deep blocks fails against a side that sits
+   off and counters (Hibs away, 25 Oct 2026: 53% of the ball, 10 of 14 shots from distance, 0.8 xG against 3.5).
+   **Build on what already works.** Check each slot's defensive record in `get_matches` (goals and xG against per
+   shape) and keep the structure that protects the back line; adapt the attacking parts to the opponent rather than
+   designing a new tactic. A redesign that conceded 6 in 2 matches replaced a setup that had conceded 3 in 10.
+3. **Gather what you need.** `get_tactics` for the current state, `get_tactic_options` for the keys (styles,
    mentalities, each phase's formations, team instructions, player instruction groups), `get_role_fit` for the roles a
    position offers and who suits them, and `get_squad` for player ids and attributes. Choose players on ability and
    role fit; condition recovers between matches.
-3. **Dry run.** Call `set_tactic` without `apply`. It checks every key, and every role against the player's role table
+4. **Dry run.** Call `set_tactic` without `apply`. It checks every key, and every role against the player's role table
    at the position, and returns the planned steps. A 400 lists what's wrong.
-4. **Show the plan** in plain football terms (shape in each phase, XI with roles and ratings, mentality, instructions),
+5. **Show the plan** in plain football terms (shape in each phase, XI with roles and ratings, mentality, instructions),
    with the effects worth knowing:
    - A new style resets the mentality and every team instruction to the style's own.
    - A formation change reshuffles players across slots and resets roles: give the full lineup in the same call.
    - Bringing players in changes the team's selection, which every slot shares.
-5. **Apply** with `apply: true` once the user agrees. Each step comes back Done, Failed or Skipped; the first failure
+6. **Apply** with `apply: true` once the user agrees. Each step comes back Done, Failed or Skipped; the first failure
    stops the rest. Fix the cause and send only what's left.
-6. **Check** with `get_tactics` (the game's effectiveness rating of the new slot is a useful verdict), and ask the user
+7. **Check** with `get_tactics` (the game's effectiveness rating of the new slot is a useful verdict), and ask the user
    to confirm on screen.
 
 Lineup rules: to change who plays, list all eleven, each with a position in both phases; otherwise list only the
