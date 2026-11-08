@@ -7,12 +7,17 @@ internal static class WriteGuard
 {
     private const string LiveMatchPath = "Team.NextFixture.IsLiveMatch";
 
-    public static async Task EnsureAllowedAsync(bool confirmed, TimeSpan timeout)
+    public static void EnsureConfirmed(bool confirmed)
     {
         if (!confirmed)
         {
             throw new ArgumentException("This changes the game. Repeat the request with confirm=true once the user has agreed.");
         }
+    }
+
+    public static async Task EnsureAllowedAsync(bool confirmed, TimeSpan timeout)
+    {
+        EnsureConfirmed(confirmed);
 
         var live = await MainThreadDispatcher.RunAcrossFramesAsync(
             () => PropertyRequest.Start(

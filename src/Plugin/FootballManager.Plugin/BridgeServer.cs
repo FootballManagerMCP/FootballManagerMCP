@@ -4,11 +4,12 @@ using System.Text;
 using BepInEx.Logging;
 using FootballManager.Plugin.Data;
 using FootballManager.Plugin.Inspection;
+using FootballManager.Plugin.Session;
 using FootballManager.Plugin.Writes;
 
 namespace FootballManager.Plugin;
 
-internal sealed class BridgeServer(int port, ManualLogSource log) : IDisposable
+internal sealed class BridgeServer(int port, string investigationSave, ManualLogSource log) : IDisposable
 {
     // Data requests wait a few frames per step for the game to answer; the squad takes two steps.
     private static readonly TimeSpan RequestTimeout = TimeSpan.FromSeconds(75);
@@ -72,6 +73,8 @@ internal sealed class BridgeServer(int port, ManualLogSource log) : IDisposable
                     + "&dryRun=true, "
                     + "/move?index=<0-10>&to=<position mask>|with=<0-10>&inPossession=true|false, "
                     + "/pick?index=<0-10>&player=<database index> (dryRun=true to only build either). "
+                    + "Investigation save: /session; /load and /quit (confirm=true, or dryRun=true) open it from the start screen and "
+                    + "quit the game with it or the start screen loaded, never any other save. "
                     + "Recording: /events?start=true[&interop=false][&writes=false][&ui=false][&data=true]|stop=true|clear=true, "
                     + "read with /events[?stream=data].");
             }
@@ -102,8 +105,11 @@ internal sealed class BridgeServer(int port, ManualLogSource log) : IDisposable
         context.Response.Close();
     }
 
-    private static Func<Task<Reply>>? Route(string path, NameValueCollection query) => path switch
+    private Func<Task<Reply>>? Route(string path, NameValueCollection query) => path switch
     {
+        "/session" => Json(() => SaveSession.DescribeAsync(investigationSave, AnswerTimeout(query))),
+        "/load" => Json(() => SaveSession.LoadAsync(investigationSave, SessionSend(query), AnswerTimeout(query))),
+        "/quit" => Json(() => SaveSession.QuitAsync(investigationSave, SessionSend(query), AnswerTimeout(query))),
         "/status" => Text(GameStatus.Describe),
         "/ui" => Text(() => UiTreeDumper.Dump(query["visibleOnly"] != "false", ParseInt(query["maxDepth"], 500))),
         "/find" => Text(() => UiTreeDumper.Find(query["text"] ?? "")),
@@ -216,6 +222,19 @@ internal sealed class BridgeServer(int port, ManualLogSource log) : IDisposable
         }
 
         return await LineupPicker.PickAsync(index, player, send, timeout);
+    }
+
+    // Loading and quitting change what the game runs, so they need confirm=true unless only built (dryRun=true).
+    private static bool SessionSend(NameValueCollection query)
+    {
+        var send = query["dryRun"] != "true";
+
+        if (send)
+        {
+            WriteGuard.EnsureConfirmed(query["confirm"] == "true");
+        }
+
+        return send;
     }
 
     private static int? ParseOptionalInt(string? value)

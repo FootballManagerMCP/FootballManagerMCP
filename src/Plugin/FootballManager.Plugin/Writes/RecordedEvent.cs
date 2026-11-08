@@ -38,7 +38,7 @@ internal sealed class RecordedEvent(string type, string? key = null)
         Description[name] = new Dictionary<string, object?>
         {
             ["type"] = value.GetIl2CppType().FullName,
-            ["value"] = TypedValueReader.Read(value),
+            ["value"] = Redaction.Apply(TypedValueReader.Read(value)),
             ["shape"] = TypedValueShape.Describe(value)
         };
     }
@@ -77,7 +77,7 @@ internal sealed class RecordedEvent(string type, string? key = null)
     // Something only worth showing (an enum's name, a binding key), not a value to send back.
     public void AddNote(string name, object? value)
     {
-        Description[name] = value;
+        Description[name] = Redaction.Apply(name, value);
     }
 
     public void Fail(string message)
