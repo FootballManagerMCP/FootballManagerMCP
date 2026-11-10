@@ -1,11 +1,13 @@
 using FootballManager.Api.Requests.Scouting;
 using FootballManager.Api.Requests.Tactics.Editing;
 using FootballManager.Api.Responses.Matches;
+using FootballManager.Api.Responses.Messages;
 using FootballManager.Api.Responses.Players;
 using FootballManager.Api.Responses.Scouting;
 using FootballManager.Api.Responses.Teams;
 using FootballManager.Api.Responses.Tactics.Effectiveness;
 using FootballManager.Domain.Matches;
+using FootballManager.Domain.Messages;
 using FootballManager.Domain.Players;
 using FootballManager.Domain.Scouting;
 using FootballManager.Domain.Tactics;
@@ -45,6 +47,21 @@ public class MappingConfig
 
         RegisterMatches(config);
         RegisterScouting(config);
+        RegisterMessages(config);
+    }
+
+    // A message's flags are left out when false, except whether it's been read.
+    private static void RegisterMessages(TypeAdapterConfig config)
+    {
+        config.NewConfig<Inbox, InboxResponse>()
+            .Map(dest => dest.Count, src => src.Messages.Count);
+
+        config.NewConfig<InboxMessage, InboxMessageResponse>()
+            .Map(dest => dest.IsImportant, src => src.IsImportant ? true : (bool?)null)
+            .Map(dest => dest.IsPriority, src => src.IsPriority ? true : (bool?)null)
+            .Map(dest => dest.CanReply, src => src.CanReply ? true : (bool?)null)
+            .Map(dest => dest.HasReplied, src => src.HasReplied ? true : (bool?)null)
+            .Map(dest => dest.IsForwarded, src => src.IsForwarded ? true : (bool?)null);
     }
 
     // Flags and empty lists that only repeat the usual case are left out, keeping long player lists short.

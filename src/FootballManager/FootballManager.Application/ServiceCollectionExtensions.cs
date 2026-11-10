@@ -15,6 +15,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IScoutingService, ScoutingService>();
         services.AddScoped<IScoutingEditingService, ScoutingEditingService>();
         services.AddScoped<IPlayerSearchService, PlayerSearchService>();
+        services.AddScoped<IInboxService, InboxService>();
         return services;
     }
 }

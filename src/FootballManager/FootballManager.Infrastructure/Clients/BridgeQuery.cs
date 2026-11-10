@@ -48,6 +48,9 @@ internal sealed class BridgeQuery
     /// <summary>Reads only the list's first <paramref name="take"/> items; the answer's total is the whole list's size.</summary>
     public BridgeQuery Take(int take) => Add("take", Format(take));
 
+    /// <summary>Starts the list's page after its first <paramref name="skip"/> items.</summary>
+    public BridgeQuery Skip(int skip) => Add("skip", Format(skip));
+
     /// <summary>Passes each list item as the named context instead of reading from it.</summary>
     public BridgeQuery ItemAs(string context) => Add("itemAs", context);
 
@@ -55,6 +58,9 @@ internal sealed class BridgeQuery
     public BridgeQuery Each(string context, int from, int to) => Add("each", $"{context}:{Format(from)}:{Format(to)}");
 
     public BridgeQuery Context(string name, bool value) => Add("ctx", $"{name}:{(value ? "true" : "false")}");
+
+    // Text goes in single quotes, as the plugin reads a text literal.
+    public BridgeQuery Context(string name, string text) => Add("ctx", $"{name}:'{text}'");
 
     public BridgeQuery Context(string name, long value) => Add("ctx", $"{name}:{Format(value)}");
 

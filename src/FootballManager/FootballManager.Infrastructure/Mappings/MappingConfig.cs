@@ -1,5 +1,6 @@
 using System.Globalization;
 using FootballManager.Domain.Matches;
+using FootballManager.Domain.Messages;
 using FootballManager.Domain.Players;
 using FootballManager.Domain.Scouting;
 using FootballManager.Domain.Tactics;
@@ -8,6 +9,7 @@ using FootballManager.Domain.Tactics.Effectiveness;
 using FootballManager.Infrastructure.Constants;
 using FootballManager.Infrastructure.Dtos;
 using FootballManager.Infrastructure.Dtos.Matches;
+using FootballManager.Infrastructure.Dtos.Messages;
 using FootballManager.Infrastructure.Dtos.Players;
 using FootballManager.Infrastructure.Dtos.Scouting;
 using FootballManager.Infrastructure.Dtos.Tactics;
@@ -54,6 +56,27 @@ public class MappingConfig
         RegisterTactics(config);
         RegisterMatches(config);
         RegisterScouting(config);
+        RegisterMessages(config);
+    }
+
+    // Every message attaches something: a forwarded one the article it passes on, any other itself. Only a forwarded
+    // message's source and attachment are its own.
+    private static void RegisterMessages(TypeAdapterConfig config)
+    {
+        config.NewConfig<BridgeInboxMessageDto, InboxMessage>()
+            .Map(dest => dest.Id, src => src.Id ?? 0)
+            .Map(dest => dest.Title, src => src.Title ?? string.Empty)
+            .Map(dest => dest.Sender, src => Text(src.Sender))
+            .Map(dest => dest.Subtitle, src => Text(src.Subtitle))
+            .Map(dest => dest.Body, src => Text(src.Body))
+            .Map(dest => dest.IsRead, src => src.IsRead == true)
+            .Map(dest => dest.IsImportant, src => src.IsImportant == true)
+            .Map(dest => dest.IsPriority, src => src.IsPriority == true)
+            .Map(dest => dest.CanReply, src => src.CanReply == true)
+            .Map(dest => dest.HasReplied, src => src.HasReplied == true)
+            .Map(dest => dest.IsForwarded, src => src.IsForwarded == true)
+            .Map(dest => dest.Source, src => src.IsForwarded == true ? Text(src.Source) : null)
+            .Map(dest => dest.Article, src => src.IsForwarded == true ? Text(src.Article) : null);
     }
 
     // What the club's scouting knows: the game sends values it doesn't know as empty text, or a -1 count.
