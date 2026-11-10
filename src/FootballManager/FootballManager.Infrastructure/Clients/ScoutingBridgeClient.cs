@@ -32,13 +32,26 @@ internal sealed class ScoutingBridgeClient(
             BridgeQuery.FromHuman().List(ScoutingConstants.Scouts).WithHumanAndTeam().Props(ScoutingConstants.ScoutProperties),
             cancellationToken);
         var focuses = GetFocusesAsync(cancellationToken);
+        var budget = GetBudgetAsync(cancellationToken);
 
-        await Task.WhenAll(counts, scouts, focuses);
+        await Task.WhenAll(counts, scouts, focuses, budget);
 
         var overview = (await counts).Values.Adapt<ScoutingOverview>();
+        overview.Budget = await budget;
         overview.Scouts = (await scouts).Items.Select(scout => scout.Values.Adapt<Scout>()).ToList();
         overview.Focuses = await focuses;
         return overview;
+    }
+
+    public async Task<ScoutingBudget> GetBudgetAsync(CancellationToken cancellationToken = default)
+    {
+        var budget = await bridge.GetRecordAsync<BridgeScoutingBudgetDto>(
+            BridgeQuery.FromHuman()
+                .WithHumanAndTeam()
+                .Props([ScoutingConstants.Budget, ScoutingConstants.CostsThisSeason, ScoutingConstants.CostsThisMonth]),
+            cancellationToken);
+
+        return budget.Values.Adapt<ScoutingBudget>();
     }
 
     public async Task<List<RecruitmentFocus>> GetFocusesAsync(CancellationToken cancellationToken = default)

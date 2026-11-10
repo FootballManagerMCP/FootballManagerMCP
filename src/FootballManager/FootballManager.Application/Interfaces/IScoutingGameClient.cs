@@ -9,8 +9,11 @@ namespace FootballManager.Application.Interfaces;
 /// </summary>
 public interface IScoutingGameClient
 {
-    /// <summary>The scouting centre's counts, the club's scouts and its recruitment focuses.</summary>
+    /// <summary>The scouting centre's counts, the scouting budget, the club's scouts and its recruitment focuses.</summary>
     Task<ScoutingOverview> GetOverviewAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>The season's scouting budget and what scouting has cost so far.</summary>
+    Task<ScoutingBudget> GetBudgetAsync(CancellationToken cancellationToken = default);
 
     /// <summary>The club's recruitment focuses.</summary>
     Task<List<RecruitmentFocus>> GetFocusesAsync(CancellationToken cancellationToken = default);

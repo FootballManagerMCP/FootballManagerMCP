@@ -120,6 +120,44 @@ public class MappingConfig
             .Map(dest => dest.OutOfPossessionPositions, src => src.OutOfPossessionPositions.Count > 0
                 ? src.OutOfPossessionPositions.Select(p => p.Code).ToList()
                 : null);
+
+        // Money stays in the game's own unit; the response names it.
+        config.NewConfig<ScoutingBudget, ScoutingBudgetResponse>()
+            .Map(dest => dest.Currency, src => ScoutingBudget.Currency);
+
+        config.NewConfig<PlayerScoutingChange, PlayerScoutingChangeResponse>()
+            .Map(dest => dest.ConfirmationIsWarning, src => src.ConfirmationIsWarning ? true : (bool?)null);
+
+        // Every player of a team gets the same scout and duration, and mostly the same confirmation: they're given
+        // once, and a player's own confirmation only when it says something else.
+        config.NewConfig<TeamScoutingChange, TeamScoutingChangeResponse>()
+            .Map(dest => dest.Count, src => src.Players.Count)
+            .Map(dest => dest.Choice, src => src.Players.Count > 0 ? src.Players[0].Choice : null)
+            .Map(dest => dest.Confirmation, src => src.Players.Count > 0 ? src.Players[0].Confirmation : null)
+            .Map(dest => dest.Notes, src => src.Notes.Count > 0 ? src.Notes : null)
+            .AfterMapping((src, dest) =>
+            {
+                for (var i = 0; i < dest.Players.Count && i < src.Players.Count; i++)
+                {
+                    if (SameConfirmation(src.Players[i], src.Players[0]))
+                    {
+                        dest.Players[i].Confirmation = null;
+                    }
+                }
+            });
+
+        config.NewConfig<PlayerScoutingChange, TeamScoutedPlayerResponse>()
+            .Map(dest => dest.Name, src => src.PlayerName);
+
+        config.NewConfig<SkippedPlayer, SkippedPlayerResponse>()
+            .Map(dest => dest.Name, src => src.PlayerName);
+    }
+
+    // The game names the player in his confirmation: two say the same when they do with the names left out.
+    private static bool SameConfirmation(PlayerScoutingChange player, PlayerScoutingChange first)
+    {
+        return player.Confirmation?.Replace(player.PlayerName, string.Empty)
+               == first.Confirmation?.Replace(first.PlayerName, string.Empty);
     }
 
     // A match reads from the user's side: "for" is their team, "against" the opponent.

@@ -14,6 +14,8 @@ public class ScoutingOverview
     /// <summary>Every player the club's scouting knows something about.</summary>
     public int? ScoutedPlayers { get; set; }
 
+    public ScoutingBudget? Budget { get; set; }
+
     public List<Scout> Scouts { get; set; } = [];
 
     /// <summary>The focuses as the scouting screen lists them, filtered by <see cref="FocusesShown"/>.</summary>

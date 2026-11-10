@@ -13,6 +13,15 @@ public class PlayerScoutingChange
     /// <summary>The menu entry picked, as the game labels it: "Assign scout > David Pleat (Scout) > 1 week".</summary>
     public required string Choice { get; set; }
 
+    /// <summary>What the game asks the user to confirm for this entry (for a scout: the costs to expect), when it asks.</summary>
+    public string? Confirmation { get; set; }
+
+    /// <summary>The game words that confirmation as a warning against going ahead; such a change isn't applied.</summary>
+    public bool ConfirmationIsWarning { get; set; }
+
+    /// <summary>For a scout sent: the scouting budget and spending before it.</summary>
+    public ScoutingBudget? Budget { get; set; }
+
     /// <summary>As the game reads back after the change; for a dry run, as it is now.</summary>
     public bool? IsShortlisted { get; set; }
     public bool? IsBeingScouted { get; set; }

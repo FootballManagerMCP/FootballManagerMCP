@@ -30,6 +30,12 @@ public interface IScoutingEditorGameClient
     /// </summary>
     Task<ScoutedPlayer?> FindPlayerAsync(int playerId, CancellationToken cancellationToken = default);
 
+    /// <summary>
+    /// A team's squad, by the team's FM id (a team of the user's competitions, or a club the game's search has listed),
+    /// with each player made reachable for <see cref="GetMenuAsync"/>; null for a team neither has listed.
+    /// </summary>
+    Task<TeamPlayers?> GetTeamPlayersAsync(int teamId, CancellationToken cancellationToken = default);
+
     /// <summary>The player's menu for <paramref name="action"/>, or null when the game doesn't offer it for him.</summary>
     Task<List<MenuEntry>?> GetMenuAsync(int playerId, PlayerMenuAction action, CancellationToken cancellationToken = default);
 

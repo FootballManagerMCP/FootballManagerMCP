@@ -67,6 +67,7 @@ Everything runs on your PC. Nothing is sent anywhere, except what your AI client
 | | `run_player_search` | Runs the game's player search with filters (age, positions, grade, quick filters, interest) |
 | | `create_recruitment_focus` / `remove_recruitment_focus` | Adds or removes a recruitment focus |
 | | `scout_player` / `shortlist_player` | Sends a scout to watch a player; adds a player to the shortlist or takes him off |
+| | `scout_team` | Sends scouts to watch every player of a team, one assignment each |
 | Database | `search_database` | The game's search box: any player, staff member, club, competition or nation in the world |
 | Inbox | `get_inbox` | Your messages, newest first, with forwarded press articles on request |
 
@@ -82,8 +83,13 @@ review and a match plan with these tools (see [step 8](#8-optional-install-the-t
   and `get_team` briefly makes the team it reads the game's current team, then puts yours back. Don't run `get_team`
   at the same time as `set_tactic`.
 - **Every change is a dry run first.** The tools that change something (`set_tactic`, `run_player_search`,
-  `create_recruitment_focus`, `remove_recruitment_focus`, `scout_player`, `shortlist_player`) only check and describe
-  the change unless they're called with `apply: true`. Their descriptions tell the AI to ask you before applying.
+  `create_recruitment_focus`, `remove_recruitment_focus`, `scout_player`, `scout_team`, `shortlist_player`) only check
+  and describe the change unless they're called with `apply: true`. Their descriptions tell the AI to ask you before
+  applying.
+- **Scouting shows its cost first.** Scouting has no price up front: it costs travel and expenses as the scout works.
+  The dry runs of `scout_player` and `scout_team` show the season's scouting budget (spent and left) and the game's own
+  confirmation message, and the game's warnings block the change. `scout_team` only applies with the number of players
+  you agreed to: if the plan has changed since the dry run, nothing is sent.
 - **No changes during a match.** The plugin refuses every change while a match is being played.
 - **Your saves are left alone.** Nothing saves the game, continues to the next day, or opens or closes a save. (The
   plugin can open and quit one save of your choice, a copy for an AI to experiment on alone: see

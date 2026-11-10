@@ -5,7 +5,7 @@ namespace FootballManager.Infrastructure.Dtos.Scouting;
 
 /// <summary>
 /// An entry of a game menu. Top entries carry their fields directly; entries below come wrapped in RowData, beside
-/// their own ChildList. The payload the entry sends (ActionData) stays in the game and isn't read here.
+/// their own ChildList. Of the payload the entry sends (ActionData), only the confirmation dialog is read.
 /// </summary>
 internal sealed class BridgeMenuItemDto
 {
@@ -16,6 +16,7 @@ internal sealed class BridgeMenuItemDto
     public int? Event { get; set; }
 
     public bool? Disabled { get; set; }
+    public BridgeActionDataDto? ActionData { get; set; }
     public BridgeMenuItemDto? RowData { get; set; }
 
     [JsonConverter(typeof(CappedListJsonConverter<BridgeMenuItemDto>))]

@@ -21,7 +21,8 @@ internal sealed class ScoutingEditorBridgeClient(
     IScoutingGameClient scouting,
     RemovedFocusLog removed,
     SearchPositions searchPositions,
-    DatabaseSearchBridgeClient databaseSearch)
+    DatabaseSearchBridgeClient databaseSearch,
+    TeamsBridgeClient teams)
     : IScoutingEditorGameClient
 {
     // The game shows a change a frame or more after its event.
@@ -34,9 +35,9 @@ internal sealed class ScoutingEditorBridgeClient(
     private static readonly string[] PlayerFlags =
         [GameConstants.UniqueId, GameConstants.Name, ScoutingConstants.IsShortlisted, ScoutingConstants.IsBeingScouted];
 
-    // Where each player was found, by id: a path to him through a list holding him, from the user's manager (Human) or,
-    // for one found with the game's search, the game; and the person search's type when that list is one (the
-    // shortlist, the player search).
+    // Where each player was found, by id: a path to him through a list holding him (a scouting list, or a team's squad),
+    // from the user's manager (Human) or, for one found through the game's search, the game; and the person search's
+    // type when that list is one (the shortlist, the player search).
     private readonly Dictionary<int, (string Root, string Path, int? SearchType)> _players = [];
 
     public async Task<List<ScoutingArea>> GetAreasAsync(CancellationToken cancellationToken = default)
@@ -281,8 +282,56 @@ internal sealed class ScoutingEditorBridgeClient(
             cancellationToken);
 
         // The player as the game holds him now; off the shortlist, he may no longer be in the list he was found in.
+        // Read where he was found first: looking through every list takes far longer.
         await Task.Delay(SettlePoll, cancellationToken);
-        return await FindPlayerAsync(playerId, cancellationToken);
+        return await ReadAtAsync(playerId, player, cancellationToken) ?? await FindPlayerAsync(playerId, cancellationToken);
+    }
+
+    public async Task<TeamPlayers?> GetTeamPlayersAsync(int teamId, CancellationToken cancellationToken = default)
+    {
+        if (await teams.LocateAsync(teamId, cancellationToken) is not { } team)
+        {
+            return null;
+        }
+
+        var squad = $"{team.Path}.{TeamConstants.Players}";
+        var root = team.Root == GameConstants.GameRoot ? BridgeQuery.FromGame() : BridgeQuery.FromHuman();
+
+        var players = await bridge.GetListAsync<BridgeScoutedPlayerDto>(
+            root.List(squad).WithHumanAndTeam().Props(PlayerFlags), cancellationToken, gapsExpected: true);
+
+        var found = new List<ScoutedPlayer>();
+
+        foreach (var player in players.Items)
+        {
+            if (player.Values.Id is { } id)
+            {
+                _players[id] = (team.Root, $"{squad}[{GameConstants.UniqueId}={Format(id)}]", null);
+                found.Add(player.Values.Adapt<ScoutedPlayer>());
+            }
+        }
+
+        return new TeamPlayers { TeamId = teamId, TeamName = team.Name, Players = found };
+    }
+
+    // The player at the place he was found, or null when he's no longer there.
+    private async Task<ScoutedPlayer?> ReadAtAsync(
+        int playerId, (string Root, string Path, int? SearchType) place, CancellationToken cancellationToken)
+    {
+        var root = place.Root == GameConstants.GameRoot ? BridgeQuery.FromGame() : BridgeQuery.FromHuman();
+
+        try
+        {
+            var player = await bridge.GetRecordAsync<BridgeScoutedPlayerDto>(
+                ScoutingBridgeClient.InSearch(root, place.SearchType).Base(place.Path).WithHumanAndTeam().Props(PlayerFlags),
+                cancellationToken);
+
+            return player.Values.Id == playerId ? player.Values.Adapt<ScoutedPlayer>() : null;
+        }
+        catch (GameUnavailableException) when (!cancellationToken.IsCancellationRequested)
+        {
+            return null;
+        }
     }
 
     private async Task FillAsync(FocusDraft draft, CancellationToken cancellationToken)

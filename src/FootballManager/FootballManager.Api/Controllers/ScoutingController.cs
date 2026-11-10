@@ -108,6 +108,21 @@ public class ScoutingController(
         return result.ToGetResult<PlayerScoutingChange, PlayerScoutingChangeResponse>(c => c.Adapt<PlayerScoutingChangeResponse>());
     }
 
+    /// <summary>
+    /// Sends a scout (named, or any) to watch every player of a team who isn't watched yet, one assignment each, through
+    /// each player's menu in the game; only with apply=true and the dry run's count of players (expectedPlayers).
+    /// </summary>
+    [HttpPost("teams/{teamId:int}/scout")]
+    public async Task<Results<Ok<TeamScoutingChangeResponse>, BadRequest, NotFound, ProblemHttpResult>> ScoutTeamAsync(
+        int teamId,
+        [FromBody] ScoutTeamRequest request,
+        [FromQuery] bool apply = false,
+        CancellationToken cancellationToken = default)
+    {
+        var result = await editingService.ScoutTeamAsync(teamId, request.Scout, request.Duration, request.ExpectedPlayers, apply, cancellationToken);
+        return result.ToGetResult<TeamScoutingChange, TeamScoutingChangeResponse>(c => c.Adapt<TeamScoutingChangeResponse>());
+    }
+
     /// <summary>Adds a player from the user's scouting lists to the shortlist; only with apply=true.</summary>
     [HttpPost("players/{playerId:int}/shortlist")]
     public async Task<Results<Ok<PlayerScoutingChangeResponse>, BadRequest, NotFound, ProblemHttpResult>> ShortlistPlayerAsync(

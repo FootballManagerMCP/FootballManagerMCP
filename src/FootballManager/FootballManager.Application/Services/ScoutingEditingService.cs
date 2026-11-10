@@ -23,6 +23,17 @@ public interface IScoutingEditingService
     Task<Result<PlayerScoutingChange>> ScoutPlayerAsync(
         int playerId, string? scout, ScoutingDuration duration, bool apply, CancellationToken cancellationToken = default);
 
+    /// <summary>
+    /// Has a scout watch every player of a team who isn't watched yet, one assignment each, as <see cref="ScoutPlayerAsync"/>
+    /// does for one. Only when <paramref name="apply"/> is set.
+    /// </summary>
+    /// <param name="expectedPlayers">
+    /// Needed to apply: how many players the dry run listed, as the user agreed to it. Nothing is sent when the plan no
+    /// longer has that many.
+    /// </param>
+    Task<Result<TeamScoutingChange>> ScoutTeamAsync(
+        int teamId, string? scout, ScoutingDuration duration, int? expectedPlayers, bool apply, CancellationToken cancellationToken = default);
+
     /// <summary>Adds a player to the shortlist, only when <paramref name="apply"/> is set.</summary>
     Task<Result<PlayerScoutingChange>> ShortlistPlayerAsync(
         int playerId, ShortlistDuration duration, bool apply, CancellationToken cancellationToken = default);
@@ -45,6 +56,7 @@ public class ScoutingEditingService(IScoutingEditorGameClient editor, IScoutingG
     public const int MaxNameLength = 120;
     private const int SuggestionsShown = 10;
     private const string Separator = " > ";
+    private const int MenusAtOnce = 4;
 
     public async Task<Result<FocusCreation>> CreateFocusAsync(FocusBrief brief, bool apply, CancellationToken cancellationToken = default)
     {
@@ -121,37 +133,192 @@ public class ScoutingEditingService(IScoutingEditorGameClient editor, IScoutingG
     public Task<Result<PlayerScoutingChange>> ScoutPlayerAsync(
         int playerId, string? scout, ScoutingDuration duration, bool apply, CancellationToken cancellationToken = default)
     {
-        return ChangeAsync(playerId, PlayerMenuAction.AssignScout, apply, (player, menu) =>
-        {
-            // The menu's first entries: any scout, then the people the game lets the user name (scouts, other staff),
-            // each with the same durations below.
-            var anyScout = menu.FirstOrDefault(entry => entry.Children.Count > 0 && entry.Children.All(child => child.CanRun));
+        return ChangeAsync(playerId, PlayerMenuAction.AssignScout, apply,
+            (player, menu) => ScoutEntry(player, menu, scout, duration), cancellationToken);
+    }
 
-            if (scout is null)
+    // Plans every player first, from his own menu, so a scout the game doesn't offer stops the run before anything is
+    // sent; then sends them one at a time, stopping at the first the game refuses. Applying needs the count the dry
+    // run showed: the user agrees to that many assignments, not to whatever the squad holds by then.
+    public async Task<Result<TeamScoutingChange>> ScoutTeamAsync(
+        int teamId, string? scout, ScoutingDuration duration, int? expectedPlayers, bool apply, CancellationToken cancellationToken = default)
+    {
+        if (apply && expectedPlayers is null)
+        {
+            return Result.Fail<TeamScoutingChange>(new ValidationError("expectedPlayers",
+                ["Applying needs expectedPlayers: the number of players the dry run listed, which the user agreed to."]));
+        }
+
+        try
+        {
+            if (await editor.GetTeamPlayersAsync(teamId, cancellationToken) is not { } team)
             {
-                return anyScout is null
-                    ? Result.Fail<List<int>>(new ValidationError("scout", ["The game offers no 'any scout' entry; name a scout."]))
-                    : Duration(menu, [menu.IndexOf(anyScout)], (int)duration, Enum.GetValues<ScoutingDuration>().Length, TimeDurations);
+                return Result.Fail<TeamScoutingChange>(new ValidationError("teamId",
+                    [$"No team with id {teamId} in the user's league or competitions, nor among the clubs the database search " +
+                     "has found (search for it first)."]));
             }
 
-            var people = menu
-                .Select((entry, index) => (entry, index))
-                .Where(top => top.entry.Children.Any(person => person.Children.Count > 0))
-                .SelectMany(top => top.entry.Children.Select((person, index) => (Path: new List<int> { top.index, index }, person.Label)))
-                .ToList();
+            var change = new TeamScoutingChange { Applied = apply, TeamId = team.TeamId, TeamName = team.TeamName };
+            var planned = new List<(ScoutedPlayer Player, List<int> Entry)>();
 
-            var wanted = GameNames.Normalise(scout);
-            var matches = people.Where(person => GameNames.Normalise(person.Label).StartsWith(wanted, StringComparison.Ordinal)).ToList();
+            change.Skipped.AddRange(team.Players.Where(player => player.IsBeingScouted).Select(player => Skip(player, "already being scouted")));
 
-            return matches.Count switch
+            var candidates = team.Players.Where(player => !player.IsBeingScouted).ToList();
+            var menus = await MenusAsync(candidates, cancellationToken);
+
+            for (var i = 0; i < candidates.Count; i++)
             {
-                1 => Duration(menu, matches[0].Path, (int)duration, Enum.GetValues<ScoutingDuration>().Length, TimeDurations),
-                0 => Result.Fail<List<int>>(new ValidationError("scout",
-                    [$"No one called '{scout}' can be sent to watch {player.Name}. The game offers: {string.Join(", ", people.Select(p => p.Label))}."])),
-                _ => Result.Fail<List<int>>(new ValidationError("scout",
-                    [$"'{scout}' matches {string.Join(", ", matches.Select(m => m.Label))}. Give the full name."]))
-            };
-        }, cancellationToken);
+                var player = candidates[i];
+                var menu = menus[i];
+
+                if (menu is null)
+                {
+                    change.Skipped.Add(Skip(player, "the game doesn't offer to scout him"));
+                    continue;
+                }
+
+                var entry = ScoutEntry(player, menu, scout, duration);
+
+                if (entry.IsFailed)
+                {
+                    // The scouts the game offers are the same for every player: a scout it doesn't know stops the run.
+                    if (entry.HasError<ValidationError>(error => error.PropertyName == "scout"))
+                    {
+                        return entry.ToResult<TeamScoutingChange>();
+                    }
+
+                    change.Skipped.Add(Skip(player,
+                        string.Join(" ", entry.Errors.OfType<ValidationError>().SelectMany(error => error.ErrorMessages))));
+                    continue;
+                }
+
+                var picked = ConfirmationOf(menu, entry.Value);
+
+                if (picked.IsWarning)
+                {
+                    change.Skipped.Add(Skip(player, $"the game warns against it: {picked.Text}"));
+                    continue;
+                }
+
+                planned.Add((player, entry.Value));
+                change.Players.Add(new PlayerScoutingChange
+                {
+                    Applied = false,
+                    PlayerId = player.Id,
+                    PlayerName = player.Name,
+                    Action = PlayerMenuAction.AssignScout,
+                    Choice = Label(menu, entry.Value),
+                    Confirmation = picked.Text,
+                    IsShortlisted = player.IsShortlisted,
+                    IsBeingScouted = player.IsBeingScouted
+                });
+            }
+
+            change.Budget = await scouting.GetBudgetAsync(cancellationToken);
+
+            if (apply)
+            {
+                if (expectedPlayers != planned.Count)
+                {
+                    return Result.Fail<TeamScoutingChange>(new ValidationError("expectedPlayers",
+                        [$"The user agreed to {expectedPlayers} players, but {planned.Count} would be sent a scout now. " +
+                         "Nothing was sent: run the dry run again and show the user the new plan."]));
+                }
+
+                await SendAsync(change, planned, cancellationToken);
+            }
+
+            return Result.Ok(change);
+        }
+        catch (GameUnavailableException exception)
+        {
+            return Result.Fail<TeamScoutingChange>(new GameUnavailableError(exception.Message));
+        }
+        catch (GameRejectedException exception)
+        {
+            return Result.Fail<TeamScoutingChange>(new ValidationError("game", [exception.Message]));
+        }
+    }
+
+    // Runs each planned entry in turn. The first refusal (the budget spent, say) would come again for the rest: the run
+    // stops there and says so, keeping what was already sent.
+    private async Task SendAsync(
+        TeamScoutingChange change, List<(ScoutedPlayer Player, List<int> Entry)> planned, CancellationToken cancellationToken)
+    {
+        for (var i = 0; i < planned.Count; i++)
+        {
+            try
+            {
+                var after = await editor.RunMenuEntryAsync(planned[i].Player.Id, PlayerMenuAction.AssignScout, planned[i].Entry, cancellationToken);
+                change.Players[i].Applied = true;
+                change.Players[i].IsBeingScouted = after?.IsBeingScouted;
+            }
+            catch (GameRejectedException exception)
+            {
+                change.Notes.Add($"The game refused to scout {planned[i].Player.Name}: {exception.Message} The run stopped there; " +
+                                 $"{change.Players.Count - i} players weren't sent a scout.");
+                change.Players.RemoveRange(i, change.Players.Count - i);
+                return;
+            }
+        }
+    }
+
+    // Each player's scouting menu, a few at a time: one after another, a squad's take twenty seconds. Only the plan reads
+    // them; sending reads each player's menu again, one at a time.
+    private async Task<List<MenuEntry>?[]> MenusAsync(List<ScoutedPlayer> players, CancellationToken cancellationToken)
+    {
+        using var gate = new SemaphoreSlim(MenusAtOnce);
+
+        return await Task.WhenAll(players.Select(async player =>
+        {
+            await gate.WaitAsync(cancellationToken);
+
+            try
+            {
+                return await editor.GetMenuAsync(player.Id, PlayerMenuAction.AssignScout, cancellationToken);
+            }
+            finally
+            {
+                gate.Release();
+            }
+        }));
+    }
+
+    private static SkippedPlayer Skip(ScoutedPlayer player, string reason)
+    {
+        return new SkippedPlayer { PlayerId = player.Id, PlayerName = player.Name, Reason = reason };
+    }
+
+    // The entry sending a scout: any scout, or the one named, for the duration asked. The menu's first entries are any
+    // scout, then the people the game lets the user name (scouts, other staff), each with the same durations below.
+    private static Result<List<int>> ScoutEntry(ScoutedPlayer player, List<MenuEntry> menu, string? scout, ScoutingDuration duration)
+    {
+        var anyScout = menu.FirstOrDefault(entry => entry.Children.Count > 0 && entry.Children.All(child => child.CanRun));
+
+        if (scout is null)
+        {
+            return anyScout is null
+                ? Result.Fail<List<int>>(new ValidationError("scout", ["The game offers no 'any scout' entry; name a scout."]))
+                : Duration(menu, [menu.IndexOf(anyScout)], (int)duration, Enum.GetValues<ScoutingDuration>().Length, TimeDurations);
+        }
+
+        var people = menu
+            .Select((entry, index) => (entry, index))
+            .Where(top => top.entry.Children.Any(person => person.Children.Count > 0))
+            .SelectMany(top => top.entry.Children.Select((person, index) => (Path: new List<int> { top.index, index }, person.Label)))
+            .ToList();
+
+        var wanted = GameNames.Normalise(scout);
+        var matches = people.Where(person => GameNames.Normalise(person.Label).StartsWith(wanted, StringComparison.Ordinal)).ToList();
+
+        return matches.Count switch
+        {
+            1 => Duration(menu, matches[0].Path, (int)duration, Enum.GetValues<ScoutingDuration>().Length, TimeDurations),
+            0 => Result.Fail<List<int>>(new ValidationError("scout",
+                [$"No one called '{scout}' can be sent to watch {player.Name}. The game offers: {string.Join(", ", people.Select(p => p.Label))}."])),
+            _ => Result.Fail<List<int>>(new ValidationError("scout",
+                [$"'{scout}' matches {string.Join(", ", matches.Select(m => m.Label))}. Give the full name."]))
+        };
     }
 
     public Task<Result<PlayerScoutingChange>> ShortlistPlayerAsync(
@@ -183,7 +350,8 @@ public class ScoutingEditingService(IScoutingEditorGameClient editor, IScoutingG
             {
                 return Result.Fail<PlayerScoutingChange>(new ValidationError("playerId",
                     [$"Player {playerId} isn't in the user's scouting lists (the scouting centre's recommendations, the shortlist, " +
-                     "a recruitment focus's players, or the player search's results): get_scouted_players lists them."]));
+                     "a recruitment focus's players, or the player search's results), which get_scouted_players lists, nor " +
+                     "among the players the database search has found: search for him first."]));
             }
 
             var menu = await editor.GetMenuAsync(playerId, action, cancellationToken);
@@ -200,6 +368,8 @@ public class ScoutingEditingService(IScoutingEditorGameClient editor, IScoutingG
                 return entry.ToResult<PlayerScoutingChange>();
             }
 
+            var picked = ConfirmationOf(menu, entry.Value);
+
             var change = new PlayerScoutingChange
             {
                 Applied = apply,
@@ -207,9 +377,18 @@ public class ScoutingEditingService(IScoutingEditorGameClient editor, IScoutingG
                 PlayerName = player.Name,
                 Action = action,
                 Choice = Label(menu, entry.Value),
+                Confirmation = picked.Text,
+                ConfirmationIsWarning = picked.IsWarning,
+                Budget = action == PlayerMenuAction.AssignScout ? await scouting.GetBudgetAsync(cancellationToken) : null,
                 IsShortlisted = player.IsShortlisted,
                 IsBeingScouted = player.IsBeingScouted
             };
+
+            if (apply && picked.IsWarning)
+            {
+                return Result.Fail<PlayerScoutingChange>(new ValidationError("game",
+                    [$"The game warns against this, so it wasn't done: {picked.Text}"]));
+            }
 
             if (apply)
             {
@@ -254,6 +433,26 @@ public class ScoutingEditingService(IScoutingEditorGameClient editor, IScoutingG
         }
 
         return Result.Ok<List<int>>([.. path, index]);
+    }
+
+    // The game's confirmation for the entry at path. An entry under a named person sits deeper than the plugin expands
+    // its payload; the confirmation (the costs, the scouting network) is the player's rather than the scout's, so it's
+    // the one of the same duration under another entry, such as any scout.
+    private static (string? Text, bool IsWarning) ConfirmationOf(List<MenuEntry> menu, List<int> path)
+    {
+        var entry = Entry(menu, path);
+
+        if (entry.Confirmation is not null || path.Count < 3)
+        {
+            return (entry.Confirmation, entry.ConfirmationIsWarning);
+        }
+
+        var same = menu
+            .Where(top => top.Children.Count > path[^1])
+            .Select(top => top.Children[path[^1]])
+            .FirstOrDefault(child => child.Confirmation is not null);
+
+        return same is null ? (null, false) : (same.Confirmation, same.ConfirmationIsWarning);
     }
 
     private static MenuEntry Entry(List<MenuEntry> menu, IReadOnlyList<int> path)

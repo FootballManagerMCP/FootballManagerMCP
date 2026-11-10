@@ -114,6 +114,12 @@ internal static class ScoutingConstants
     // The focus wizard works on a draft focus (id -1): its fields are set, then confirming creates a focus from it and
     // resets it, as cancelling does.
     public const string ScoutingInfo = "ScoutingInfo";
+
+    // The season's scouting budget and what scouting has cost, from the user's manager, in the game's own unit (pounds:
+    // a scouted wage's sort value is in pounds a week where the screen shows euros a month, 1.164 euros to the pound).
+    public const string Budget = ScoutingInfo + ".ScoutingBudget";
+    public const string CostsThisSeason = "Club.ScoutingCostsThisSeason";
+    public const string CostsThisMonth = "Club.ScoutingCostsThisMonth";
     public const string Draft = "ScoutingInfo.NewRecruitmentFocus";
     public const string DraftAreaSelection = Draft + ".PossibleScoutingAreasDropdownSelectedOption";
     public const string AnyPosition = "AnyPosition";

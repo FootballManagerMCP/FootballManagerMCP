@@ -204,6 +204,8 @@ public class MappingConfig
         config.NewConfig<BridgeMenuItemDto, MenuEntry>()
             .Map(dest => dest.Label, src => MenuLabel(src))
             .Map(dest => dest.CanRun, src => MenuRuns(src))
+            .Map(dest => dest.Confirmation, src => MenuConfirmation(src))
+            .Map(dest => dest.ConfirmationIsWarning, src => MenuWarns(src))
             .Map(dest => dest.Children, src => src.ChildList ?? new List<BridgeMenuItemDto>());
 
         // Every box of the position grid, ticked or not, is a position a focus can ask for.
@@ -595,8 +597,28 @@ public class MappingConfig
 
     private static bool MenuRuns(BridgeMenuItemDto item)
     {
-        var fields = item.Text is null && item.RowData is not null ? item.RowData : item;
+        var fields = MenuFields(item);
         return fields.Event == ScoutingConstants.DoActionEventId && fields.Disabled != true;
+    }
+
+    private static BridgeMenuItemDto MenuFields(BridgeMenuItemDto item)
+    {
+        return item.Text is null && item.RowData is not null ? item.RowData : item;
+    }
+
+    private static bool MenuWarns(BridgeMenuItemDto item)
+    {
+        return MenuFields(item).ActionData?.ConfirmationDialogData?.IsErrorDialog == true;
+    }
+
+    // The dialog's text on one line, as the game words it ("Ask the scouts to watch X? ... travel costs ...").
+    private static string? MenuConfirmation(BridgeMenuItemDto item)
+    {
+        var description = Text(MenuFields(item).ActionData?.ConfirmationDialogData?.Description);
+
+        return description is null
+            ? null
+            : string.Join(' ', description.Split(['\n', '\r'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries));
     }
 
     private static List<TacticalPosition> TickedPositions(List<BridgeFocusPositionDto> grid, bool inPossession)

@@ -10,7 +10,9 @@ public static class ScoutingTools
     [McpServerTool(Name = "get_scouting")]
     [Description("Get the user's player recruitment set-up from their running Football Manager 27 save, read live from " +
                  "the game: how many players the scouting centre recommends (and how many highly), reports still being " +
-                 "written, the shortlist's size and how many players the club's scouting knows; the club's scouts with " +
+                 "written, the shortlist's size and how many players the club's scouting knows; the season's scouting budget " +
+                 "with what's been spent this season and this month, what's left and the share spent (in pounds " +
+                 "sterling, the unit the game keeps money in, whatever currency its screens show); the club's scouts with " +
                  "their judging player ability and potential (1-20); and every recruitment focus (the standing briefs " +
                  "the scouts work to) with its id, name, status, the areas and scouts covering it, who created it and " +
                  "when, its age range, the minimum current and potential ability stars it asks for (0-20 scale, 20 = " +
@@ -203,9 +205,12 @@ public static class ScoutingTools
                  "one of the user's scouting lists (get_scouted_players: the recommendations, the shortlist, a focus's " +
                  "players, the player search's results), or have been found with search_database. By default a dry run that returns the menu entry it would pick, " +
                  "in the game's language; " +
-                 "call again with apply=true once the user has agreed. Scouting costs money from the scouting budget, " +
-                 "more for longer or farther assignments. An unknown name returns everyone the game offers. Refused " +
-                 "while a match is being played.")]
+                 "call again with apply=true once the user has agreed. The dry run also gives the scouting budget (spent " +
+                 "and left this season) and the game's own confirmation message: scouting has no price up front, it " +
+                 "costs travel, accommodation and expenses as the scout works, more for each match watched, and the " +
+                 "message says so and whether the player is within the scouting network. Show the user both before " +
+                 "applying. When the game words its message as a warning (confirmationIsWarning), applying is refused. " +
+                 "An unknown name returns everyone the game offers. Refused while a match is being played.")]
     public static async Task<string> ScoutPlayer(
         IHttpClientFactory httpFactory,
         [Description("The player's FM id, from get_scouted_players or search_database.")]
@@ -225,6 +230,46 @@ public static class ScoutingTools
         var response = await http.PostAsJsonAsync(
             $"/api/v1/scouting/players/{playerId}/scout?apply={apply.ToString().ToLowerInvariant()}",
             new { scout, duration });
+
+        return await response.ReadContentOrError();
+    }
+
+    [McpServerTool(Name = "scout_team")]
+    [Description("Send scouts to watch every player of a team, one assignment per player, through each player's own " +
+                 "menu in the running game, as scout_player does for one: a named scout or other member of staff, or any " +
+                 "scout. Players already being scouted are skipped, as are those the game won't offer (each skip comes with " +
+                 "its reason). The team can be any of the user's league or competitions (get_team), or any club found with " +
+                 "search_database (its id, or a person's clubId). By default a dry run that lists the players and the " +
+                 "menu entry it would pick, in the game's language, with the scouting budget (spent and left this season, " +
+                 "in pounds) and the game's own confirmation message about costs: scouting has no price up front, each " +
+                 "assignment costs travel, accommodation and expenses as the scout works, more for each match watched. " +
+                 "Show the user how many players it covers, the budget and the message, and ask. To apply, call again " +
+                 "with apply=true and expectedPlayers set to the dry run's count: if the plan has changed since, nothing " +
+                 "is sent. Players the game warns against are skipped. Applying stops at the first player the game " +
+                 "refuses and says so, " +
+                 "keeping the ones already sent. A squad takes about a second per player. Refused while a match is being " +
+                 "played. This isn't the game's team report (a pre-match report on the team as a whole, which the staff " +
+                 "request before each match): it watches the players one by one.")]
+    public static async Task<string> ScoutTeam(
+        IHttpClientFactory httpFactory,
+        [Description("The team's FM id: from get_team, get_matches or search_database.")]
+        int teamId,
+        [Description("Who should watch them: a scout's name as get_scouting lists it (the start of it is enough). " +
+                     "Leave out for any scout.")]
+        string? scout = null,
+        [Description("How long: UntilFullKnowledge (the default), OneWeek, TwoWeeks, OneMonth, TwoMonths, ThreeMonths, " +
+                     "OneMatch, TwoMatches, ThreeMatches or FourMatches.")]
+        string duration = "UntilFullKnowledge",
+        [Description("False (the default) only checks. True sends the scouts: only once the user has agreed.")]
+        bool apply = false,
+        [Description("Needed with apply=true: the number of players the dry run listed (its count), as the user agreed to it.")]
+        int? expectedPlayers = null)
+    {
+        var http = httpFactory.CreateClient("FootballManagerApi");
+
+        var response = await http.PostAsJsonAsync(
+            $"/api/v1/scouting/teams/{teamId}/scout?apply={apply.ToString().ToLowerInvariant()}",
+            new { scout, duration, expectedPlayers });
 
         return await response.ReadContentOrError();
     }

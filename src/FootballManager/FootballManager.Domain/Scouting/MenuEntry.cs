@@ -8,5 +8,11 @@ public class MenuEntry
     /// <summary>The entry does something when picked (it isn't only a sub-menu, or greyed out).</summary>
     public bool CanRun { get; set; }
 
+    /// <summary>What the game asks the user to confirm before running it, in its display language, when it asks.</summary>
+    public string? Confirmation { get; set; }
+
+    /// <summary>The game shows that confirmation as an error: a warning against going ahead.</summary>
+    public bool ConfirmationIsWarning { get; set; }
+
     public List<MenuEntry> Children { get; set; } = [];
 }

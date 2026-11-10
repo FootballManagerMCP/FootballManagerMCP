@@ -87,6 +87,27 @@ internal sealed class TeamsBridgeClient(GameBridge bridge, GameVocabulary vocabu
         return new KnownTeam(id, name, team.Values.League ?? string.Empty);
     }
 
+    /// <summary>
+    /// Where a team is, for other clients to reach it (its squad): the root its path starts from, the path, and its name.
+    /// Null for a team neither the user's competitions nor the game's search have listed.
+    /// </summary>
+    public async Task<(string Root, string Path, string Name)?> LocateAsync(int teamId, CancellationToken cancellationToken = default)
+    {
+        if (!_teams.ContainsKey(teamId))
+        {
+            await GetTeamsAsync(cancellationToken);
+        }
+
+        if (!_teams.ContainsKey(teamId))
+        {
+            await GetSearchedTeamAsync(teamId, cancellationToken);
+        }
+
+        return _teams.TryGetValue(teamId, out var team)
+            ? (team.OnGame ? GameConstants.GameRoot : GameConstants.HumanRoot, team.Path, team.Name)
+            : null;
+    }
+
     public async Task<TeamSeason> GetSeasonAsync(int teamId, CancellationToken cancellationToken = default)
     {
         if (!_teams.ContainsKey(teamId))
