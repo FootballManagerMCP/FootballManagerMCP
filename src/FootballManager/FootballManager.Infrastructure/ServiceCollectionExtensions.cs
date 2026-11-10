@@ -27,6 +27,8 @@ public static class ServiceCollectionExtensions
         });
 
         services.AddScoped<GameBridge>();
+        services.AddSingleton<RemovedFocusLog>();
+        services.AddSingleton<SearchPositions>();
         services.AddScoped<GameVocabulary>();
         services.AddScoped<TeamInstructionReader>();
         services.AddScoped<ISquadGameClient, SquadBridgeClient>();
@@ -34,6 +36,8 @@ public static class ServiceCollectionExtensions
         services.AddScoped<ITacticEditorGameClient, TacticEditorBridgeClient>();
         services.AddScoped<IMatchesGameClient, MatchesBridgeClient>();
         services.AddScoped<ITeamsGameClient, TeamsBridgeClient>();
+        services.AddScoped<IScoutingGameClient, ScoutingBridgeClient>();
+        services.AddScoped<IScoutingEditorGameClient, ScoutingEditorBridgeClient>();
 
         var mappingConfig = new MappingConfig();
         mappingConfig.Register(TypeAdapterConfig.GlobalSettings);

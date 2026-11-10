@@ -23,6 +23,12 @@ internal sealed class BridgeQuery
         return new BridgeQuery(GameConstants.HumanRoot);
     }
 
+    /// <summary>The game itself, which holds what isn't anyone's: the menu actions a record offers.</summary>
+    public static BridgeQuery FromGame()
+    {
+        return new BridgeQuery(GameConstants.GameRoot);
+    }
+
     /// <summary>
     /// The tactic the team plays. Reads pass the user's manager and team as contexts, like the game's screens; writes
     /// don't, like the tactics screen's controls.
@@ -39,6 +45,9 @@ internal sealed class BridgeQuery
 
     public BridgeQuery Index(int index) => Add("index", Format(index));
 
+    /// <summary>Reads only the list's first <paramref name="take"/> items; the answer's total is the whole list's size.</summary>
+    public BridgeQuery Take(int take) => Add("take", Format(take));
+
     /// <summary>Passes each list item as the named context instead of reading from it.</summary>
     public BridgeQuery ItemAs(string context) => Add("itemAs", context);
 
@@ -49,11 +58,20 @@ internal sealed class BridgeQuery
 
     public BridgeQuery Context(string name, long value) => Add("ctx", $"{name}:{Format(value)}");
 
+    // An unsigned id as the game types it (an action's ID).
+    public BridgeQuery Context(string name, uint value) => Add("ctx", $"{name}:u:{Format(value)}");
+
     // Masks use all 64 bits; the plugin takes them as signed and hands the game the same bits.
     public BridgeQuery Context(string name, ulong value) => Context(name, unchecked((long)value));
 
     /// <summary>Passes the record at <paramref name="path"/> under the root as the named context.</summary>
     public BridgeQuery Ref(string name, string path) => Add("ref", $"{name}:{path}");
+
+    /// <summary>
+    /// Passes the record at <paramref name="path"/> under the user's manager (Human), whatever this query's root, as the
+    /// one item of a list: the form of the "Records" a menu action applies to.
+    /// </summary>
+    public BridgeQuery RefListFromHuman(string name, string path) => Add("refList", $"{name}:{GameConstants.HumanRoot}/{path}");
 
     /// <summary>Passes the user's manager and team as "human" and "team", as the game's own screens do.</summary>
     public BridgeQuery WithHumanAndTeam() => Add("contexts", "true");

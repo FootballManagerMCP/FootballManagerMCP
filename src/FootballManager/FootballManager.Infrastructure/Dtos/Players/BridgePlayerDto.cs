@@ -42,6 +42,14 @@ internal sealed class BridgePlayerDto
     [JsonPropertyName(GameConstants.AverageRating)]
     public double? AverageRating { get; set; }
 
+    [JsonPropertyName(GameConstants.Statuses)]
+    [JsonConverter(typeof(CappedListJsonConverter<BridgePlayerStatusDto>))]
+    public List<BridgePlayerStatusDto>? Statuses { get; set; }
+
+    [JsonPropertyName(GameConstants.TeamStatuses)]
+    [JsonConverter(typeof(CappedListJsonConverter<BridgePlayerStatusDto>))]
+    public List<BridgePlayerStatusDto>? TeamStatuses { get; set; }
+
     [JsonPropertyName(GameConstants.CurrentAbility)]
     public int? CurrentAbility { get; set; }
 

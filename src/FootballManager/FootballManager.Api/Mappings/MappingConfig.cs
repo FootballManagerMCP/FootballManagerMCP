@@ -1,10 +1,13 @@
+using FootballManager.Api.Requests.Scouting;
 using FootballManager.Api.Requests.Tactics.Editing;
 using FootballManager.Api.Responses.Matches;
 using FootballManager.Api.Responses.Players;
+using FootballManager.Api.Responses.Scouting;
 using FootballManager.Api.Responses.Teams;
 using FootballManager.Api.Responses.Tactics.Effectiveness;
 using FootballManager.Domain.Matches;
 using FootballManager.Domain.Players;
+using FootballManager.Domain.Scouting;
 using FootballManager.Domain.Tactics;
 using FootballManager.Domain.Tactics.Editing;
 using FootballManager.Domain.Tactics.Effectiveness;
@@ -20,6 +23,7 @@ public class MappingConfig
         config.NewConfig<Squad, SquadResponse>();
 
         config.NewConfig<Player, PlayerResponse>()
+            .Map(dest => dest.Statuses, src => src.Statuses.Count > 0 ? src.Statuses : null)
             .Map(dest => dest.Attributes, src => GroupAttributes(src.Attributes));
 
         Rounded(config.NewConfig<PlayerSeasonStats, PlayerSeasonStatsResponse>());
@@ -40,6 +44,48 @@ public class MappingConfig
             .Map(dest => dest.Lineup, src => src.Lineup ?? new List<LineupChangeRequest>());
 
         RegisterMatches(config);
+        RegisterScouting(config);
+    }
+
+    // Flags and empty lists that only repeat the usual case are left out, keeping long player lists short.
+    private static void RegisterScouting(TypeAdapterConfig config)
+    {
+        config.NewConfig<ScoutedPlayerList, ScoutedPlayerListResponse>()
+            .Map(dest => dest.Count, src => src.Players.Count)
+            .Map(dest => dest.HiddenDataMasked, src => src.HiddenDataMasked ? true : (bool?)null);
+
+        config.NewConfig<ScoutedPlayer, ScoutedPlayerResponse>()
+            .Map(dest => dest.KnowledgeLevel, src => src.KnowledgeLevel == null ? null : $"{src.KnowledgeLevel}/{src.KnowledgeMax}")
+            .Map(dest => dest.IsShortlisted, src => src.IsShortlisted ? true : (bool?)null)
+            .Map(dest => dest.IsBeingScouted, src => src.IsBeingScouted ? true : (bool?)null)
+            .Map(dest => dest.Statuses, src => src.Statuses.Count > 0 ? src.Statuses : null)
+            .Map(dest => dest.Attributes, src => GroupAttributes(src.Attributes));
+
+        config.NewConfig<ScoutReport, ScoutReportResponse>()
+            .Map(dest => dest.Pros, src => src.Pros.Count > 0 ? src.Pros : null)
+            .Map(dest => dest.Cons, src => src.Cons.Count > 0 ? src.Cons : null);
+
+        // A request leaves out what it doesn't set: no areas, any position.
+        config.NewConfig<CreateFocusRequest, FocusBrief>()
+            .Map(dest => dest.Areas, src => src.Areas ?? new List<string>())
+            .Map(dest => dest.Positions, src => src.Positions ?? new List<string>());
+
+        config.NewConfig<FocusCreation, FocusCreationResponse>()
+            .Map(dest => dest.Planned, src => src.Draft)
+            .Map(dest => dest.Notes, src => src.Notes.Count > 0 ? src.Notes : null);
+
+        config.NewConfig<FocusDraft, FocusDraftResponse>()
+            .Map(dest => dest.Areas, src => src.Areas.Count > 0 ? src.Areas.Select(a => a.Display).ToList() : null)
+            .Map(dest => dest.Positions, src => src.Positions.Count > 0 ? src.Positions.Select(p => p.Code).ToList() : null);
+
+        config.NewConfig<RecruitmentFocus, RecruitmentFocusResponse>()
+            .Map(dest => dest.ShowsRemovedFocus, src => src.ShowsRemovedFocus ? true : (bool?)null)
+            .Map(dest => dest.IsComplete, src => src.IsComplete ? true : (bool?)null)
+            .Map(dest => dest.IsStruggling, src => src.IsStruggling ? true : (bool?)null)
+            .Map(dest => dest.Positions, src => src.Positions.Count > 0 ? src.Positions.Select(p => p.Code).ToList() : null)
+            .Map(dest => dest.OutOfPossessionPositions, src => src.OutOfPossessionPositions.Count > 0
+                ? src.OutOfPossessionPositions.Select(p => p.Code).ToList()
+                : null);
     }
 
     // A match reads from the user's side: "for" is their team, "against" the opponent.

@@ -16,7 +16,10 @@ internal static class ValueSources
 
         foreach (var value in sources.Values.Where(v => v.Path is not null))
         {
-            captures[value.Path!] = value.IsListItem ? PropertyCapture.Tree : PropertyCapture.Value;
+            // An item picked by index is one of the list's own items; one picked by a field can sit anywhere in a tree.
+            captures[value.Path!] = value.MatchIndex is not null ? PropertyCapture.Items
+                : value.IsListItem ? PropertyCapture.Tree
+                : PropertyCapture.Value;
         }
 
         IReadOnlyList<PropertyBinding> bindings = [];
@@ -54,6 +57,15 @@ internal static class ValueSources
             return binding.CapturedValue ?? throw new ArgumentException($"{name}: the game didn't answer '{value.Path}'.");
         }
 
+        if (value.MatchIndex is { } index)
+        {
+            var items = binding.CapturedItems ?? throw new ArgumentException($"{name}: '{value.Path}' isn't a list (or wasn't answered).");
+
+            return index < items.Count
+                ? TypedValue.CreateCopyFrom(ItemField(name, items[index], value.ItemFields))
+                : throw new ArgumentException($"{name}: '{value.Path}' has {items.Count} items; [{index}] must be 0 to {items.Count - 1}.");
+        }
+
         var rows = binding.CapturedTree ?? throw new ArgumentException($"{name}: '{value.Path}' isn't a list (or wasn't answered).");
         var seen = new List<string>();
 
@@ -73,13 +85,22 @@ internal static class ValueSources
             $"{name}: no item of '{value.Path}' has {value.MatchField}={value.MatchValue}. Its values: {string.Join(", ", seen.Distinct())}.");
     }
 
-    // The value at a dotted path of field names inside a matched item, or the item itself when no path is given.
+    // The value at a dotted path of field names inside a matched item, or the item itself when no path is given. A number
+    // in the path picks an item of the list it follows (ChildList.2).
     private static TypedValue ItemField(string name, TypedValue item, IReadOnlyList<string>? fields)
     {
         var current = item;
 
         foreach (var field in fields ?? [])
         {
+            if (TypedValueReader.AsList(current) is { } list && int.TryParse(field, NumberStyles.None, CultureInfo.InvariantCulture, out var position))
+            {
+                current = position < list.Count
+                    ? list[position]
+                    : throw new ArgumentException($"{name}: the list has {list.Count} items; .{field} must be 0 to {list.Count - 1}.");
+                continue;
+            }
+
             var record = TypedValueReader.AsRecord(current)
                 ?? throw new ArgumentException($"{name}: the item has no records to find '{field}' in.");
 

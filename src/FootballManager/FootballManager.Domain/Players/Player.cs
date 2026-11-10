@@ -27,6 +27,9 @@ public class Player
     /// <summary>Average match rating this season; null without appearances.</summary>
     public double? AverageRating { get; set; }
 
+    /// <summary>The statuses the game shows for them: injured, transfer listed, needs a rest, a promise due, ...</summary>
+    public List<PlayerStatus> Statuses { get; set; } = [];
+
     public List<PlayerAttribute> Attributes { get; set; } = [];
 
     /// <summary>Only filled when asked for.</summary>

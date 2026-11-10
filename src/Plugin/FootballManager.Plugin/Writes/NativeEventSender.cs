@@ -74,7 +74,8 @@ internal static class NativeEventSender
             {
                 if (dataRecord is { } json)
                 {
-                    return RecordBuilder.Build(json, values);
+                    // data=null: the event carries nothing, as many of the game's confirm and cancel events do.
+                    return json.ValueKind == System.Text.Json.JsonValueKind.Null ? null : RecordBuilder.Build(json, values);
                 }
 
                 if (values.TryGetValue(DataField, out var value))

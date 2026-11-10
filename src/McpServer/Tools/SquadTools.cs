@@ -9,7 +9,11 @@ public static class SquadTools
     [McpServerTool(Name = "get_squad")]
     [Description("Get the user's first-team squad from their running Football Manager 27 save, read live from the game. " +
                  "For each player: FM id, name, age, positions, best role, personality, morale, condition (%, absent " +
-                 "while injured), match sharpness (%), injury status and average rating this season. Optionally each " +
+                 "while injured), match sharpness (%), injury status, average rating this season, and the statuses the " +
+                 "game shows for them (its status icons), each with the game's English key, label and details: " +
+                 "injuries and fitness tests, TransferListed, PlayerWaitingOnPromiseForHappiness (with the promise), " +
+                 "Wanted (the clubs watching them), AvailableForReserveTeam, reactions to press conferences and team " +
+                 "talks, needing a rest, language courses, and so on. Optionally each " +
                  "player's visible attributes (1-20), grouped as technical, mental, physical and goalkeeping; a range " +
                  "like '11-14' means scouting is incomplete. Text values (positions, roles, morale, personality) are in " +
                  "the game's display language. Fails with a 503 when the game isn't running or no save is loaded.")]

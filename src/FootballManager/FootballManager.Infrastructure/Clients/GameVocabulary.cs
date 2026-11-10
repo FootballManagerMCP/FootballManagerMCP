@@ -6,16 +6,24 @@ using FootballManager.Infrastructure.Mappings;
 namespace FootballManager.Infrastructure.Clients;
 
 // What the game calls the things a tactic holds as numbers, read once per request: its enums for styles, mentalities,
-// formations and roles, and the tactics screen's catalogs of team and player instructions.
+// formations and roles, and the tactics screen's catalogs of team and player instructions; and its names for a player's
+// status flags.
 internal sealed class GameVocabulary(GameBridge bridge)
 {
     private Task<TacticKeys>? _keys;
+    private Task<Dictionary<long, string>>? _statusKeys;
     private Task<List<BridgeTeamInstructionDto>>? _teamInstructions;
     private Task<List<BridgePlayerInstructionGroupDto>>? _playerInstructions;
 
     public Task<TacticKeys> KeysAsync(CancellationToken cancellationToken)
     {
         return _keys ??= LoadKeysAsync(cancellationToken);
+    }
+
+    /// <summary>The game's names for a player's status flags (FM.UI.PlayerStatusFlag), by value.</summary>
+    public Task<Dictionary<long, string>> StatusKeysAsync(CancellationToken cancellationToken)
+    {
+        return _statusKeys ??= LoadStatusKeysAsync(cancellationToken);
     }
 
     /// <summary>The game only has these once its tactics screen has been opened.</summary>
@@ -35,5 +43,20 @@ internal sealed class GameVocabulary(GameBridge bridge)
             $"/enums?types={Uri.EscapeDataString(string.Join(',', TacticConstants.Enums))}", cancellationToken);
 
         return TacticKeys.From(enums);
+    }
+
+    private async Task<Dictionary<long, string>> LoadStatusKeysAsync(CancellationToken cancellationToken)
+    {
+        var enums = await bridge.GetJsonAsync<Dictionary<string, Dictionary<string, long>>>(
+            $"/enums?types={Uri.EscapeDataString(GameConstants.StatusFlagsEnum)}", cancellationToken);
+
+        var keys = new Dictionary<long, string>();
+
+        foreach (var (name, value) in enums.GetValueOrDefault(GameConstants.StatusFlagsEnum) ?? [])
+        {
+            keys.TryAdd(value, name);
+        }
+
+        return keys;
     }
 }

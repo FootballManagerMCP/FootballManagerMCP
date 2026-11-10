@@ -1,9 +1,9 @@
 using System.Globalization;
-using System.Text;
 using FluentResults;
 using FootballManager.Application.Exceptions;
 using FootballManager.Application.Interfaces;
 using FootballManager.Application.ResultErrors;
+using FootballManager.Application.Text;
 using FootballManager.Domain.Matches;
 using FootballManager.Domain.Teams;
 
@@ -206,12 +206,9 @@ public class TeamsService(ITeamsGameClient gameClient) : ITeamsService
         return string.Join(", ", teams.Select(t => $"{t.Name} ({t.Competition}, id {t.Id})"));
     }
 
-    // Lower case without accents: "Atlético" and "atletico" are the same name.
     private static string Normalise(string name)
     {
-        var decomposed = name.Trim().ToLowerInvariant().Normalize(NormalizationForm.FormD);
-        var letters = decomposed.Where(c => CharUnicodeInfo.GetUnicodeCategory(c) != UnicodeCategory.NonSpacingMark);
-        return new string(letters.ToArray()).Normalize(NormalizationForm.FormC);
+        return GameNames.Normalise(name);
     }
 
     private static IEnumerable<string> Words(string name)

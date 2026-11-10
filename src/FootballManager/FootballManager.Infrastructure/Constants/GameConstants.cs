@@ -7,7 +7,9 @@ namespace FootballManager.Infrastructure.Constants;
 internal static class GameConstants
 {
     public const string HumanRoot = "Human";
+    public const string GameRoot = "game";
 
+    public const string Team = "Team";
     public const string TeamName = "Team.Name";
     public const string TeamId = "Team.UniqueId";
 
@@ -25,9 +27,16 @@ internal static class GameConstants
     public const string CurrentAbility = "PlayerCurrentAbility";
     public const string PotentialAbility = "PlayerPotentialAbility";
 
+    // A player's status icons, each with a flag of StatusFlagsEnum: all of them, and the team screens' set, which can
+    // hold a few the other lacks (scouted or analysed by the user's club). The recruitment screens' set is a subset.
+    public const string Statuses = "PlayerStatus";
+    public const string TeamStatuses = "PlayerStatusFlagsForTeam";
+    public const string StatusFlagsEnum = "FM.UI.PlayerStatusFlag";
+
     public static readonly string[] PlayerBasics =
     [
-        UniqueId, Name, Age, Positions, BestRole, Personality, Morale, Condition, Sharpness, IsInjured, AverageRating
+        UniqueId, Name, Age, Positions, BestRole, Personality, Morale, Condition, Sharpness, IsInjured, AverageRating,
+        Statuses, TeamStatuses
     ];
 
     // This season's numbers, all competitive matches for the club together.

@@ -14,6 +14,9 @@ public class PlayerResponse
     public bool IsInjured { get; set; }
     public double? AverageRating { get; set; }
 
+    /// <summary>The statuses the game shows for them; null when there are none.</summary>
+    public List<PlayerStatusResponse>? Statuses { get; set; }
+
     /// <summary>Category ("technical", "mental", ...) to attribute name to value: "12", "11-14" or null if masked.</summary>
     public Dictionary<string, Dictionary<string, string?>>? Attributes { get; set; }
 

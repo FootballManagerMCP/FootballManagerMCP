@@ -65,11 +65,13 @@ internal sealed class BridgeServer(int port, string investigationSave, ManualLog
                     + "/bindings?path=&depth=, /schema?type=person|team|club, /names?ids=, /instructions, /player-instructions, "
                     + "/enums?types=FM.UI.InPossessionRole,..., /squad?props=, "
                     + "/player?index=&props=, or /get?root=Human&props= with optional base=, list=, itemAs=, index=, "
-                    + "each=Name:from:to, ctx=Name:value and ref=Name:path (both repeatable), contexts=true, debug=true, timeoutMs=. "
+                    + "skip=&take= (a page of the list; the answer's total is the whole list's), "
+                    + "each=Name:from:to, ctx=Name:value, ref=Name:path and refList=Name:path (the record as a one-item list; all three "
+                    + "repeatable), contexts=true, debug=true, timeoutMs=. A ref path can start from another root: Name:Human/path. "
                     + "Base, list and ref paths can go through a list's item: Team.Division.TeamList[UniqueId=1556].FixtureList or [3]. "
-                    + "Writes (confirm=true): /set?<as /get>&path=&value=5|u:5|@Path|@List[Field=value]|@List[Field=value].Field, "
+                    + "Writes (confirm=true): /set?<as /get>&path=&value=5|u:5|@Path|@List[Field=value]|@List[Field=value].Field|@List[2].Field.1.Field, "
                     + "/event?<as /get>&type=role|formation|selection|modify&field=Name:<value> (repeatable)&template=none&dryRun=true, "
-                    + "/native?<as /get>&event=EventFmx...&field=Target:<value>&field=Data:<value>|data=<json record>&template=none"
+                    + "/native?<as /get>&event=EventFmx...&field=Target:<value>&field=Data:<value>|data=<json record>|data=null&template=none"
                     + "&dryRun=true, "
                     + "/move?index=<0-10>&to=<position mask>|with=<0-10>&inPossession=true|false, "
                     + "/pick?index=<0-10>&player=<database index> (dryRun=true to only build either). "
@@ -146,8 +148,10 @@ internal sealed class BridgeServer(int port, string investigationSave, ManualLog
             Index: query["index"] is null ? null : ParseInt(query["index"], 0),
             Each: NullIfEmpty(query["each"]) is { } each ? ContextRange.Parse(each) : null,
             Contexts: (query.GetValues("ctx") ?? []).Select(ContextLiteral.Parse).ToList(),
-            ContextPaths: (query.GetValues("ref") ?? []).Select(ContextPath.Parse).ToList(),
-            WithHumanAndTeam: query["contexts"] == "true");
+            ContextPaths: ContextPaths(query),
+            WithHumanAndTeam: query["contexts"] == "true",
+            Skip: ParseOptionalInt(query["skip"]),
+            Take: ParseOptionalInt(query["take"]));
     }
 
     private static async Task<string> SetAsync(NameValueCollection query)
@@ -303,8 +307,17 @@ internal sealed class BridgeServer(int port, string investigationSave, ManualLog
             ListPath: DataQueries.SquadPath,
             Index: index,
             Contexts: (query.GetValues("ctx") ?? []).Select(ContextLiteral.Parse).ToList(),
-            ContextPaths: (query.GetValues("ref") ?? []).Select(ContextPath.Parse).ToList(),
+            ContextPaths: ContextPaths(query),
             WithHumanAndTeam: query["contexts"] == "true");
+    }
+
+    // ref= and refList= together, in the order given within each.
+    private static List<ContextPath> ContextPaths(NameValueCollection query)
+    {
+        return (query.GetValues("ref") ?? [])
+            .Select(ContextPath.Parse)
+            .Concat((query.GetValues("refList") ?? []).Select(ContextPath.ParseList))
+            .ToList();
     }
 
     private static string? NullIfEmpty(string? value)

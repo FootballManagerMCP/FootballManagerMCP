@@ -19,7 +19,8 @@ internal static class DataQueries
     public static async Task<string> RunAsync(DataQuery query, TimeSpan timeout, bool debug)
     {
         var pathContexts = await ResolveContextPathsAsync(query, timeout);
-        var (record, items) = await ResolveAsync(query, pathContexts, timeout);
+        var (record, all) = await ResolveAsync(query, pathContexts, timeout);
+        var items = Page(query, all);
 
         if (!query.FansOut)
         {
@@ -38,7 +39,30 @@ internal static class DataQueries
             batch => FinishTargets(batch, debug),
             timeout);
 
-        return Json.Serialize(new Dictionary<string, object?> { ["count"] = rows.Count, ["items"] = rows });
+        var answer = new Dictionary<string, object?> { ["count"] = rows.Count, ["items"] = rows };
+
+        if (query.Paged)
+        {
+            answer["total"] = all?.Count;
+        }
+
+        return Json.Serialize(answer);
+    }
+
+    // The page of the list a query asks for (skip, take), the whole list otherwise.
+    private static List<TypedValue>? Page(DataQuery query, List<TypedValue>? items)
+    {
+        if (items is null || !query.Paged)
+        {
+            return items;
+        }
+
+        if (query.Skip < 0 || query.Take < 0)
+        {
+            throw new ArgumentException("skip and take can't be negative.");
+        }
+
+        return items.Skip(query.Skip ?? 0).Take(query.Take ?? int.MaxValue).ToList();
     }
 
     // The one record a write acts on (the query's base, or its root) with the contexts to pass, copied so it stays
@@ -62,47 +86,59 @@ internal static class DataQueries
             return [];
         }
 
-        // A path through a list item (RecordPaths) is resolved on its own; the plain ones together.
+        // A path through a list item (RecordPaths) is resolved on its own; the plain ones together, root by root.
         var contexts = new Dictionary<string, TypedValue>();
-        var selected = contextPaths.Select(c => c.Path).Where(RecordPaths.HasSelector).Distinct().ToList();
+        var selected = contextPaths.Where(c => RecordPaths.HasSelector(c.Path)).DistinctBy(c => c.Key).ToList();
 
         if (selected.Count > 0)
         {
             var literals = await MainThreadDispatcher.RunAsync(() => Contexts(query, []));
 
-            foreach (var path in selected)
+            foreach (var context in selected)
             {
-                contexts[path] = (await ReadAsync(query, literals, path, PropertyCapture.Value, timeout)).Value!;
+                var root = context.Root ?? query.Root;
+                contexts[context.Key] = (await ReadAsync(root, literals, context.Path, PropertyCapture.Value, timeout)).Value!;
             }
         }
 
-        var plain = contextPaths.Select(c => c.Path).Where(path => !RecordPaths.HasSelector(path)).Distinct().ToList();
+        var plain = contextPaths.Where(c => !RecordPaths.HasSelector(c.Path)).DistinctBy(c => c.Key).GroupBy(c => c.Root ?? query.Root);
 
-        if (plain.Count > 0)
+        foreach (var group in plain)
         {
-            var captures = plain.ToDictionary(path => path, _ => PropertyCapture.Value);
+            var paths = group.Select(c => c.Path).Distinct().ToList();
+            var captures = paths.ToDictionary(path => path, _ => PropertyCapture.Value);
 
             var bindings = await MainThreadDispatcher.RunAcrossFramesAsync(
-                () => PropertyRequest.Start(RootValue(query.Root), plain, Contexts(query, []), captures),
+                () => PropertyRequest.Start(RootValue(group.Key), paths, Contexts(query, []), captures),
                 request => request.IsComplete,
                 request => request.FinishWithCaptures(),
                 timeout);
 
-            foreach (var path in plain)
+            foreach (var context in group)
             {
-                contexts[path] = Captured(bindings, path, "a record").CapturedValue!;
+                contexts[context.Key] = Captured(bindings, context.Path, "a record").CapturedValue!;
             }
         }
 
-        return contextPaths.Select(c => new RequestContext(c.Name, contexts[c.Path])).ToList();
+        return await MainThreadDispatcher.RunAsync(() => contextPaths
+            .Select(c => new RequestContext(c.Name, c.AsList ? ListOf(contexts[c.Key]) : contexts[c.Key]))
+            .ToList());
     }
 
-    // A record (Value) or a list (Items) at a path through list items, from the query's root. The contexts come from
+    // A list holding one record, as the game passes the records a menu action applies to.
+    private static TypedValue ListOf(TypedValue record)
+    {
+        var items = new Il2CppSystem.Collections.Generic.List<TypedValue>();
+        items.Add(TypedValue.CreateCopyFrom(record));
+        return TypedValue.Create(items);
+    }
+
+    // A record (Value) or a list (Items) at a path through list items, from a root. The contexts come from
     // the main thread, like every game value.
     private static async Task<(TypedValue? Value, List<TypedValue>? Items)> ReadAsync(
-        DataQuery query, IReadOnlyList<RequestContext> contexts, string path, PropertyCapture capture, TimeSpan timeout)
+        string rootName, IReadOnlyList<RequestContext> contexts, string path, PropertyCapture capture, TimeSpan timeout)
     {
-        var root = await MainThreadDispatcher.RunAsync(() => RootValue(query.Root) is { } value
+        var root = await MainThreadDispatcher.RunAsync(() => RootValue(rootName) is { } value
             ? TypedValue.CreateCopyFrom(value)
             : throw new InvalidOperationException("The source record has no value yet."));
         var (source, rest) = await RecordPaths.WalkAsync(root, path, contexts, timeout);
@@ -169,10 +205,10 @@ internal static class DataQueries
 
         var record = query.BasePath is null
             ? null
-            : (await ReadAsync(query, contexts, query.BasePath, PropertyCapture.Value, timeout)).Value;
+            : (await ReadAsync(query.Root, contexts, query.BasePath, PropertyCapture.Value, timeout)).Value;
         var items = query.ListPath is null
             ? null
-            : (await ReadAsync(query, contexts, query.ListPath, PropertyCapture.Items, timeout)).Items;
+            : (await ReadAsync(query.Root, contexts, query.ListPath, PropertyCapture.Items, timeout)).Items;
 
         return (record, Indexed(query, items));
     }

@@ -3,13 +3,14 @@ using FootballManager.Domain.Players;
 using FootballManager.Infrastructure.Constants;
 using FootballManager.Infrastructure.Dtos;
 using FootballManager.Infrastructure.Dtos.Players;
+using FootballManager.Infrastructure.Mappings;
 using Mapster;
 
 namespace FootballManager.Infrastructure.Clients;
 
 // Reads the squad through the MCPFM plugin. Which paths make up a player lives here, so new fields never need a plugin
 // release.
-internal sealed class SquadBridgeClient(GameBridge bridge) : ISquadGameClient
+internal sealed class SquadBridgeClient(GameBridge bridge, GameVocabulary vocabulary) : ISquadGameClient
 {
     public async Task<Squad> GetSquadAsync(
         IReadOnlyCollection<AttributeDefinition> attributes,
@@ -20,13 +21,19 @@ internal sealed class SquadBridgeClient(GameBridge bridge) : ISquadGameClient
         var human = await bridge.GetRecordAsync<BridgeHumanDto>(
             BridgeQuery.FromHuman().Props([GameConstants.TeamName]), cancellationToken);
 
+        var statusKeys = vocabulary.StatusKeysAsync(cancellationToken);
         var squad = await bridge.GetSquadAsync<BridgePlayerDto>(
             PlayerPaths(attributes, includeAbility, includeStats), cancellationToken);
 
         return new Squad
         {
             TeamName = human.Values.TeamName ?? string.Empty,
-            Players = squad.Items.Select(p => p.Values.Adapt<Player>()).ToList()
+            Players = squad.Items
+                .Select(p => p.Values)
+                .ToList()
+                .BuildAdapter()
+                .AddParameters(MappingConfig.StatusKeysParameter, await statusKeys)
+                .AdaptToType<List<Player>>()
         };
     }
 
