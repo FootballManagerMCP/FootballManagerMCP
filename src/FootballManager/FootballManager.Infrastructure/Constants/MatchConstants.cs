@@ -53,6 +53,11 @@ internal static class MatchConstants
     public const string TeamStats = "Stats";
     public const string PlayerStats = "PlayerMatchStats";
 
+    // A player's last incident on his match line, as the game numbers them: 0 none, 1 came on, 2 went off (substituted,
+    // injured or not), 3 booked and stayed on, 6 came on and went off injured. Seen in 20 matches of the 2026-27 season.
+    public const int CameOnIncident = 1;
+    public const int InjuredOffIncident = 6;
+
     // Goals and the player of the match (context ShowAllEventTypes).
     public const string Incidents = "Incidents";
     public const string PlayerOfTheMatchId = "PlayerOfTheMatch." + GameConstants.UniqueId;

@@ -235,14 +235,11 @@ internal sealed class TeamsBridgeClient(GameBridge bridge, GameVocabulary vocabu
             gapsExpected: true);
     }
 
-    // The match's players in selection order, each phase's position and role joined by selection index.
+    // The match's players in selection order, each with his position and role in both phases (see LineupPairing).
     private static List<TeamLineupEntry> Lineup(
         List<BridgeLineupEntryDto> withBall, List<BridgeLineupEntryDto> withoutBall, Dictionary<int, Player> players, TacticKeys keys)
     {
-        var outOfPossession = withoutBall
-            .Where(entry => entry.TeamSelectionIndex is not null)
-            .GroupBy(entry => entry.TeamSelectionIndex!.Value)
-            .ToDictionary(group => group.Key, group => group.First());
+        var outOfPossession = LineupPairing.OutOfPossessionBySlot(withBall, withoutBall);
 
         return withBall.OrderBy(entry => entry.TeamSelectionIndex).Select(entry =>
         {

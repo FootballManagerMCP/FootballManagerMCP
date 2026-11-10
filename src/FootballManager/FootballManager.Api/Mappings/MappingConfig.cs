@@ -142,7 +142,14 @@ public class MappingConfig
         Rounded(config.NewConfig<MatchRecord, MatchRecordResponse>());
         Rounded(config.NewConfig<TeamMatchStats, TeamMatchStatsResponse>());
         Rounded(config.NewConfig<PlayerMatchStats, PlayerMatchStatsResponse>());
-        Rounded(config.NewConfig<MatchLineupPlayer, MatchLineupPlayerResponse>());
+        // Flags are left out when false.
+        Rounded(config.NewConfig<MatchLineupPlayer, MatchLineupPlayerResponse>())
+            .Map(dest => dest.WentOffInjured, src => src.WentOffInjured ? true : (bool?)null)
+            .Map(dest => dest.YellowCard, src => src.YellowCard ? true : (bool?)null)
+            .Map(dest => dest.RedCard, src => src.RedCard ? true : (bool?)null);
+
+        config.NewConfig<MatchSubstitution, MatchSubstitutionResponse>()
+            .Map(dest => dest.Injury, src => src.Injury ? true : (bool?)null);
         Rounded(config.NewConfig<PlayerOfTheMatch, PlayerOfTheMatchResponse>());
 
         Rounded(config.NewConfig<StyleAverages, StyleAveragesResponse>());

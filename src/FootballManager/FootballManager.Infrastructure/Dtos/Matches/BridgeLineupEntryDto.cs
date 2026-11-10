@@ -15,4 +15,7 @@ internal sealed class BridgeLineupEntryDto
     public int? TeamSelectionIndex { get; set; }
     public bool? MatchWasSubbedOn { get; set; }
     public double? MatchRating { get; set; }
+
+    /// <summary>Above 0 when the player was injured in the match.</summary>
+    public int? MatchInjuryType { get; set; }
 }

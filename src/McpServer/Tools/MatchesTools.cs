@@ -30,11 +30,18 @@ public static class MatchesTools
     [Description("Get one of the user's matches in depth: the summary (as in get_matches), both teams' numbers (xG, " +
                  "possession, shots, chances created, crosses, passes, progressive and final-third passes, PPDA, " +
                  "tackles, headers, offsides, cards, average rating), the goals with minute, scorer and assister, the " +
-                 "player of the match, and the user's players who took part: rating, position and role in and out of " +
-                 "possession, and their numbers (goals, assists, xG, xA, shots, key passes, clear-cut chances, passes, " +
-                 "dribbles, crosses, tackles, interceptions, possession won and lost, aerial duels, distance). " +
-                 "Substitutes have no recorded position. Names are only known for the user's own players. An upcoming " +
-                 "match returns just its summary. Role names are in the game's display language.")]
+                 "player of the match, the user's substitutions (minute, who came off and on, the slot's position, " +
+                 "injuries), and the user's players who took part: rating, when a substitute came on and when a player " +
+                 "went off (and whether injured), cards, position and role in and out of possession, and their numbers " +
+                 "(goals, assists, xG, xA, shots, key passes, clear-cut chances, passes, dribbles, crosses, tackles, " +
+                 "interceptions, possession won and lost, aerial duels, distance). A substitute's positions and roles " +
+                 "are those of the slot he took: the game doesn't keep any reshuffle made after a change. The game " +
+                 "doesn't link a player's slots in the two phases either: out-of-possession positions are paired with " +
+                 "the starters so that the eleven move least, which matches the tactic's own links. A substitute who " +
+                 "came on and went off again is traced when only one fits, else his minute on is left out. Names are " +
+                 "only known for the user's own players. An upcoming match returns just its summary. Roles come as " +
+                 "keys (the game's English identifiers, as set_tactic takes them) and names in the game's display " +
+                 "language; the name is missing for a player in a position he can't play.")]
     public static async Task<string> GetMatch(
         IHttpClientFactory httpFactory,
         [Description("The match date as yyyy-MM-dd, as get_matches lists it.")]

@@ -10,5 +10,8 @@ public class MatchDetail
 
     /// <summary>The user's players who took part, starters first, with their positions, roles and numbers.</summary>
     public List<MatchLineupPlayer> Lineup { get; set; } = [];
+
+    /// <summary>The user's substitutions, in the order they were made.</summary>
+    public List<MatchSubstitution> Substitutions { get; set; } = [];
     public PlayerOfTheMatch? PlayerOfTheMatch { get; set; }
 }

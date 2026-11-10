@@ -4,6 +4,18 @@ namespace FootballManager.Infrastructure.Dtos.Matches;
 internal sealed class BridgePlayerMatchStatsDto
 {
     public BridgeReferenceDto? Player { get; set; }
+
+    /// <summary>The player's last incident in the match (MatchConstants: came on, went off, booked, injured).</summary>
+    public int? IncidentType { get; set; }
+
+    /// <summary>The minute of that incident.</summary>
+    public int? MatchTime { get; set; }
+
+    /// <summary>The lineup slot he held at the final whistle; -1 once he had left the pitch, or never came on.</summary>
+    public int? PlayerTeamSelectionIndex { get; set; }
+
+    public bool? YellowCardedInMatch { get; set; }
+    public bool? RedCardedInMatch { get; set; }
     public double? TotalRating { get; set; }
     public int? Goals { get; set; }
     public int? Assists { get; set; }
