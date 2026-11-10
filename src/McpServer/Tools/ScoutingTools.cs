@@ -201,14 +201,14 @@ public static class ScoutingTools
     [Description("Send a scout to watch a player, through the player's own menu in the running game (as the user " +
                  "would right-click him): a named scout or other member of staff, or any scout. The player must be in " +
                  "one of the user's scouting lists (get_scouted_players: the recommendations, the shortlist, a focus's " +
-                 "players, the player search's results). By default a dry run that returns the menu entry it would pick, " +
+                 "players, the player search's results), or have been found with search_database. By default a dry run that returns the menu entry it would pick, " +
                  "in the game's language; " +
                  "call again with apply=true once the user has agreed. Scouting costs money from the scouting budget, " +
                  "more for longer or farther assignments. An unknown name returns everyone the game offers. Refused " +
                  "while a match is being played.")]
     public static async Task<string> ScoutPlayer(
         IHttpClientFactory httpFactory,
-        [Description("The player's FM id, from get_scouted_players.")]
+        [Description("The player's FM id, from get_scouted_players or search_database.")]
         int playerId,
         [Description("Who should watch him: a scout's name as get_scouting lists it (the start of it is enough, e.g. " +
                      "'Mark Cooper'). The game also offers the director of football and some coaches. Leave out for " +
@@ -232,12 +232,12 @@ public static class ScoutingTools
     [McpServerTool(Name = "shortlist_player")]
     [Description("Add a player to the user's shortlist, or take him off it, through the player's own menu in the " +
                  "running game. The player must be in one of the user's scouting lists, the player search's results " +
-                 "included (get_scouted_players). By " +
+                 "included (get_scouted_players), or have been found with search_database. By " +
                  "default a dry run that returns the menu entry it would pick; call again with apply=true once the " +
                  "user has agreed. Refused while a match is being played.")]
     public static async Task<string> ShortlistPlayer(
         IHttpClientFactory httpFactory,
-        [Description("The player's FM id, from get_scouted_players.")]
+        [Description("The player's FM id, from get_scouted_players or search_database.")]
         int playerId,
         [Description("True to take him off the shortlist instead of adding him.")]
         bool remove = false,

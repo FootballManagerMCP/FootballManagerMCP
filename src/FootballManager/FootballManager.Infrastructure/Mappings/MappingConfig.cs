@@ -1,4 +1,5 @@
 using System.Globalization;
+using FootballManager.Domain.Database;
 using FootballManager.Domain.Matches;
 using FootballManager.Domain.Messages;
 using FootballManager.Domain.Players;
@@ -8,6 +9,7 @@ using FootballManager.Domain.Tactics.Editing;
 using FootballManager.Domain.Tactics.Effectiveness;
 using FootballManager.Infrastructure.Constants;
 using FootballManager.Infrastructure.Dtos;
+using FootballManager.Infrastructure.Dtos.Database;
 using FootballManager.Infrastructure.Dtos.Matches;
 using FootballManager.Infrastructure.Dtos.Messages;
 using FootballManager.Infrastructure.Dtos.Players;
@@ -57,6 +59,30 @@ public class MappingConfig
         RegisterMatches(config);
         RegisterScouting(config);
         RegisterMessages(config);
+        RegisterDatabase(config);
+    }
+
+    // What the search shows of each kind: a person's club and nationality, a club's nation and league, a nation's
+    // continent. The linked records are the search's own line under the name.
+    private static void RegisterDatabase(TypeAdapterConfig config)
+    {
+        config.NewConfig<BridgeDatabaseRecordDto, DatabaseRecord>()
+            .Map(dest => dest.Kind, src => RecordKind(src))
+            .Map(dest => dest.Name, src => src.Name ?? string.Empty)
+            .Map(dest => dest.LongName, src => RecordKind(src) == DatabaseRecordKind.Club && src.LongName != src.Name ? Text(src.LongName) : null)
+            .Map(dest => dest.Description, src => Text(src.Description))
+            .Map(dest => dest.Type, src => RecordKind(src) == DatabaseRecordKind.Other || RecordKind(src) == DatabaseRecordKind.NationalTeam
+                ? Text(src.TypeLabel)
+                : null)
+            .Map(dest => dest.Age, src => IsPerson(src) ? src.Age : null)
+            .Map(dest => dest.Positions, src => RecordKind(src) == DatabaseRecordKind.Player ? Text(src.Positions) : null)
+            .Map(dest => dest.Job, src => RecordKind(src) == DatabaseRecordKind.Staff ? Text(src.Job) : null)
+            .Map(dest => dest.Nation, src => RecordNation(src))
+            .Map(dest => dest.Club, src => IsPerson(src) ? Text(src.Club) : null)
+            .Map(dest => dest.ClubId, src => IsPerson(src) ? src.ClubId : null)
+            .Map(dest => dest.ClubNation, src => IsPerson(src) ? Text(src.ClubNation) : null)
+            .Map(dest => dest.League, src => RecordLeague(src))
+            .Map(dest => dest.Continent, src => RecordContinent(src));
     }
 
     // Every message attaches something: a forwarded one the article it passes on, any other itself. Only a forwarded
@@ -347,6 +373,59 @@ public class MappingConfig
                && names is TacticKeys keys
             ? keys.Roles(inPossession).GetValueOrDefault(role)
             : null;
+    }
+
+    private static DatabaseRecordKind RecordKind(BridgeDatabaseRecordDto record)
+    {
+        if (IsPerson(record))
+        {
+            return record.IsPlayer switch
+            {
+                true => DatabaseRecordKind.Player,
+                false => DatabaseRecordKind.Staff,
+                null => DatabaseRecordKind.Other
+            };
+        }
+
+        return record.RecordType is { } type
+            ? DatabaseSearchConstants.Kinds.GetValueOrDefault(type, DatabaseRecordKind.Other)
+            : DatabaseRecordKind.Other;
+    }
+
+    private static bool IsPerson(BridgeDatabaseRecordDto record)
+    {
+        return record.RecordType == DatabaseSearchConstants.Person;
+    }
+
+    private static string? RecordNation(BridgeDatabaseRecordDto record)
+    {
+        return RecordKind(record) switch
+        {
+            DatabaseRecordKind.Player or DatabaseRecordKind.Staff => Text(record.Nation),
+            DatabaseRecordKind.Club => Text(record.Nation) ?? Text(record.Linked),
+            DatabaseRecordKind.Competition or DatabaseRecordKind.NationalTeam => Text(record.Linked),
+            _ => null
+        };
+    }
+
+    private static string? RecordLeague(BridgeDatabaseRecordDto record)
+    {
+        return RecordKind(record) switch
+        {
+            DatabaseRecordKind.Player or DatabaseRecordKind.Staff => Text(record.League),
+            DatabaseRecordKind.Club => Text(record.SecondaryLinked) ?? Text(record.League),
+            _ => null
+        };
+    }
+
+    private static string? RecordContinent(BridgeDatabaseRecordDto record)
+    {
+        return RecordKind(record) switch
+        {
+            DatabaseRecordKind.Nation => Text(record.Linked),
+            DatabaseRecordKind.NationalTeam => Text(record.SecondaryLinked),
+            _ => null
+        };
     }
 
     private static string? Text(string? value)

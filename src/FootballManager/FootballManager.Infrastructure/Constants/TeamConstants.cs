@@ -16,6 +16,10 @@ internal static class TeamConstants
     // On a team record.
     public const string FixtureList = "FixtureList";
     public const string Players = "Players";
+    public const string DivisionName = "Division.Name";
+
+    // A club's first team, for a club found with the game's search (on the game root).
+    public const string MainTeam = "MainTeam";
 
     // The team a past match's lineup is read for (PastMatchPlayerTacticData), as the game's screens pass it. Passing a
     // team this way makes it the user's current team (Human.Team, and with it the active tactic) until another team is

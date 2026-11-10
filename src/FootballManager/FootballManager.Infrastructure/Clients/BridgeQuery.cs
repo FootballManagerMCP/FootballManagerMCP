@@ -74,10 +74,10 @@ internal sealed class BridgeQuery
     public BridgeQuery Ref(string name, string path) => Add("ref", $"{name}:{path}");
 
     /// <summary>
-    /// Passes the record at <paramref name="path"/> under the user's manager (Human), whatever this query's root, as the
-    /// one item of a list: the form of the "Records" a menu action applies to.
+    /// Passes the record at <paramref name="path"/> under <paramref name="root"/> (the user's manager, or the game),
+    /// whatever this query's root, as the one item of a list: the form of the "Records" a menu action applies to.
     /// </summary>
-    public BridgeQuery RefListFromHuman(string name, string path) => Add("refList", $"{name}:{GameConstants.HumanRoot}/{path}");
+    public BridgeQuery RefList(string name, string root, string path) => Add("refList", $"{name}:{root}/{path}");
 
     /// <summary>Passes the user's manager and team as "human" and "team", as the game's own screens do.</summary>
     public BridgeQuery WithHumanAndTeam() => Add("contexts", "true");

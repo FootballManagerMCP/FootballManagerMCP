@@ -8,7 +8,8 @@ public static class TeamsTools
 {
     [McpServerTool(Name = "get_team")]
     [Description("Get a scouting report on any team of the user's league, or of a competition the user plays in this " +
-                 "season (European competitions, cups), read live from the game. Returns, from the team's competitive " +
+                 "season (European competitions, cups), or on any club in the world found with search_database (by " +
+                 "its id: a club result's id, or a person's clubId), read live from the game. Returns, from the team's competitive " +
                  "matches: its record overall, home and away (results, goals, xG); its style per match overall, at " +
                  "home and away, both 'for' (how it plays) and 'against' (what its opponents manage against it): " +
                  "possession, xG, shots, long shots, chances created, crosses and their completion, passes and " +
@@ -25,7 +26,8 @@ public static class TeamsTools
         IHttpClientFactory httpFactory,
         [Description("The team's name as the game writes it, in its display language (e.g. 'Barcelone' in a French " +
                      "game); case and accents don't matter, and part of the name works when it's unambiguous. Or the " +
-                     "team's FM id. An unknown name returns the closest teams with their ids.")]
+                     "team's FM id, which also works for any club search_database has found. An unknown name returns the closest " +
+                     "teams of the user's competitions with their ids.")]
         string team)
     {
         var http = httpFactory.CreateClient("FootballManagerApi");

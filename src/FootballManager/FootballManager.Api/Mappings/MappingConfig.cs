@@ -1,11 +1,13 @@
 using FootballManager.Api.Requests.Scouting;
 using FootballManager.Api.Requests.Tactics.Editing;
+using FootballManager.Api.Responses.Database;
 using FootballManager.Api.Responses.Matches;
 using FootballManager.Api.Responses.Messages;
 using FootballManager.Api.Responses.Players;
 using FootballManager.Api.Responses.Scouting;
 using FootballManager.Api.Responses.Teams;
 using FootballManager.Api.Responses.Tactics.Effectiveness;
+using FootballManager.Domain.Database;
 using FootballManager.Domain.Matches;
 using FootballManager.Domain.Messages;
 using FootballManager.Domain.Players;
@@ -48,6 +50,9 @@ public class MappingConfig
         RegisterMatches(config);
         RegisterScouting(config);
         RegisterMessages(config);
+
+        config.NewConfig<DatabaseSearch, DatabaseSearchResponse>()
+            .Map(dest => dest.Count, src => src.Results.Count);
     }
 
     // A message's flags are left out when false, except whether it's been read.

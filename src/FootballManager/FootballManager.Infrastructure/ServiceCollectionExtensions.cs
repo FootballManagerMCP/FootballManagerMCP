@@ -29,6 +29,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<GameBridge>();
         services.AddSingleton<RemovedFocusLog>();
         services.AddSingleton<SearchPositions>();
+        services.AddSingleton<SearchedRecords>();
         services.AddScoped<GameVocabulary>();
         services.AddScoped<TeamInstructionReader>();
         services.AddScoped<ISquadGameClient, SquadBridgeClient>();
@@ -40,6 +41,8 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IScoutingEditorGameClient, ScoutingEditorBridgeClient>();
         services.AddScoped<IPlayerSearchGameClient, PlayerSearchBridgeClient>();
         services.AddScoped<IInboxGameClient, InboxBridgeClient>();
+        services.AddScoped<DatabaseSearchBridgeClient>();
+        services.AddScoped<IDatabaseSearchGameClient>(provider => provider.GetRequiredService<DatabaseSearchBridgeClient>());
 
         var mappingConfig = new MappingConfig();
         mappingConfig.Register(TypeAdapterConfig.GlobalSettings);

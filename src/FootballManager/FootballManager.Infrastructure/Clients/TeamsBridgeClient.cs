@@ -1,4 +1,5 @@
 using FootballManager.Application.Interfaces;
+using FootballManager.Domain.Database;
 using FootballManager.Domain.Matches;
 using FootballManager.Domain.Players;
 using FootballManager.Domain.Teams;
@@ -13,9 +14,11 @@ using Mapster;
 namespace FootballManager.Infrastructure.Clients;
 
 // Reads other teams through the MCPFM plugin. A team is reached through a list that holds it (the user's league, or a
-// competition of one of the user's fixtures) and read like the user's own: its fixture list, each match's numbers and
-// lineups, its squad. The team goes along as the "team" context, which decides whose lineup a past match gives.
-internal sealed class TeamsBridgeClient(GameBridge bridge, GameVocabulary vocabulary) : ITeamsGameClient
+// competition of one of the user's fixtures, from the user's manager; or the game's search results, from the game) and
+// read like the user's own: its fixture list, each match's numbers and lineups, its squad. The team goes along as the
+// "team" context, which decides whose lineup a past match gives.
+internal sealed class TeamsBridgeClient(GameBridge bridge, GameVocabulary vocabulary, DatabaseSearchBridgeClient search)
+    : ITeamsGameClient
 {
     // What the user's scouting can tell of another team's players, and their season.
     private static readonly string[] SquadPaths =
@@ -24,8 +27,8 @@ internal sealed class TeamsBridgeClient(GameBridge bridge, GameVocabulary vocabu
         GameConstants.IsInjured, GameConstants.AverageRating, .. GameConstants.PlayerSeasonStats
     ];
 
-    // Where each known team is, by id, once listed.
-    private readonly Dictionary<int, (string Path, string Name)> _teams = [];
+    // Where each known team is, by id, once listed: its path, from the game root when found by the search.
+    private readonly Dictionary<int, (string Path, string Name, bool OnGame)> _teams = [];
 
     public async Task<List<KnownTeam>> GetTeamsAsync(CancellationToken cancellationToken = default)
     {
@@ -63,6 +66,27 @@ internal sealed class TeamsBridgeClient(GameBridge bridge, GameVocabulary vocabu
         return known;
     }
 
+    public async Task<KnownTeam?> GetSearchedTeamAsync(int clubId, CancellationToken cancellationToken = default)
+    {
+        if (await search.LocateAsync(DatabaseRecordKind.Club, clubId, cancellationToken) is not { } club)
+        {
+            return null;
+        }
+
+        var path = $"{club}.{TeamConstants.MainTeam}";
+        var team = await bridge.GetRecordAsync<BridgeSearchedTeamDto>(
+            BridgeQuery.FromGame().Base(path).Props([GameConstants.UniqueId, GameConstants.Name, TeamConstants.DivisionName]),
+            cancellationToken);
+
+        if (team.Values is not { Id: { } id, Name: { } name })
+        {
+            return null;
+        }
+
+        _teams[id] = (path, name, OnGame: true);
+        return new KnownTeam(id, name, team.Values.League ?? string.Empty);
+    }
+
     public async Task<TeamSeason> GetSeasonAsync(int teamId, CancellationToken cancellationToken = default)
     {
         if (!_teams.ContainsKey(teamId))
@@ -70,13 +94,13 @@ internal sealed class TeamsBridgeClient(GameBridge bridge, GameVocabulary vocabu
             await GetTeamsAsync(cancellationToken);
         }
 
-        var (path, name) = _teams.TryGetValue(teamId, out var team)
-            ? team
+        var team = _teams.TryGetValue(teamId, out var known)
+            ? known
             : throw new ArgumentException($"Team {teamId} isn't in the user's league or competitions.", nameof(teamId));
 
         try
         {
-            return await ReadSeasonAsync(teamId, path, name, cancellationToken);
+            return await ReadSeasonAsync(teamId, team, cancellationToken);
         }
         finally
         {
@@ -86,23 +110,25 @@ internal sealed class TeamsBridgeClient(GameBridge bridge, GameVocabulary vocabu
 
     // Five reads in all, each over the whole fixture list (rows in the same order): the summaries with the lineup in
     // possession, the home side's numbers, the away side's, the lineup out of possession; and the squad.
-    private async Task<TeamSeason> ReadSeasonAsync(int teamId, string path, string name, CancellationToken cancellationToken)
+    private async Task<TeamSeason> ReadSeasonAsync(
+        int teamId, (string Path, string Name, bool OnGame) team, CancellationToken cancellationToken)
     {
+        var (path, name, _) = team;
         var fixtureList = $"{path}.{TeamConstants.FixtureList}";
 
         var keys = vocabulary.KeysAsync(cancellationToken);
         var fixtures = bridge.GetListAsync<BridgeFixtureDto>(
-            OnTeam(path).List(fixtureList).Context(TacticConstants.InPossession, true).Props(MatchConstants.Summary),
+            OnTeam(team).List(fixtureList).Context(TacticConstants.InPossession, true).Props(MatchConstants.Summary),
             cancellationToken,
             gapsExpected: true);
-        var homeStats = SidesAsync(path, fixtureList, isHome: true, cancellationToken);
-        var awayStats = SidesAsync(path, fixtureList, isHome: false, cancellationToken);
+        var homeStats = SidesAsync(team, fixtureList, isHome: true, cancellationToken);
+        var awayStats = SidesAsync(team, fixtureList, isHome: false, cancellationToken);
         var withoutBall = bridge.GetListAsync<BridgeMatchLineupDto>(
-            OnTeam(path).List(fixtureList).Context(TacticConstants.InPossession, false).Props([MatchConstants.Lineup]),
+            OnTeam(team).List(fixtureList).Context(TacticConstants.InPossession, false).Props([MatchConstants.Lineup]),
             cancellationToken,
             gapsExpected: true);
         var squad = bridge.GetListAsync<BridgePlayerDto>(
-            OnTeam(path).List($"{path}.{TeamConstants.Players}").Props(SquadPaths),
+            OnTeam(team).List($"{path}.{TeamConstants.Players}").Props(SquadPaths),
             cancellationToken,
             gapsExpected: true);
 
@@ -138,9 +164,11 @@ internal sealed class TeamsBridgeClient(GameBridge bridge, GameVocabulary vocabu
     }
 
     // The team as context, and the fixture list sized like the user's (its path may go through the user's fixtures).
-    private static BridgeQuery OnTeam(string path)
+    private static BridgeQuery OnTeam((string Path, string Name, bool OnGame) team)
     {
-        return BridgeQuery.FromHuman().FixtureWindow().Ref(TeamConstants.TeamContext, path);
+        return (team.OnGame ? BridgeQuery.FromGame() : BridgeQuery.FromHuman())
+            .FixtureWindow()
+            .Ref(TeamConstants.TeamContext, team.Path);
     }
 
     private Task<BridgeListDto<BridgeTeamDto>> TeamListAsync(string path, CancellationToken cancellationToken)
@@ -159,7 +187,7 @@ internal sealed class TeamsBridgeClient(GameBridge bridge, GameVocabulary vocabu
             if (teams.Items[i].Values is { Id: { } id, Name: { } name } && known.All(team => team.Id != id))
             {
                 known.Add(new KnownTeam(id, name, competition));
-                _teams[id] = (TeamConstants.Item(listPath, i), name);
+                _teams[id] = (TeamConstants.Item(listPath, i), name, OnGame: false);
             }
         }
     }
@@ -198,10 +226,11 @@ internal sealed class TeamsBridgeClient(GameBridge bridge, GameVocabulary vocabu
     }
 
     // One side's numbers in every fixture of the list.
-    private Task<BridgeListDto<BridgeMatchSideDto>> SidesAsync(string path, string fixtureList, bool isHome, CancellationToken cancellationToken)
+    private Task<BridgeListDto<BridgeMatchSideDto>> SidesAsync(
+        (string Path, string Name, bool OnGame) team, string fixtureList, bool isHome, CancellationToken cancellationToken)
     {
         return bridge.GetListAsync<BridgeMatchSideDto>(
-            OnTeam(path).List(fixtureList).Context(MatchConstants.IsHomeTeam, isHome).Props([MatchConstants.TeamStats]),
+            OnTeam(team).List(fixtureList).Context(MatchConstants.IsHomeTeam, isHome).Props([MatchConstants.TeamStats]),
             cancellationToken,
             gapsExpected: true);
     }

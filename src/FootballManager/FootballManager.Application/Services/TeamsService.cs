@@ -28,6 +28,12 @@ public class TeamsService(ITeamsGameClient gameClient) : ITeamsService
         {
             var found = Find(team, await gameClient.GetTeamsAsync(cancellationToken));
 
+            // Any other club, once the database search has listed it.
+            if (found.IsFailed && Id(team) is { } id && await gameClient.GetSearchedTeamAsync(id, cancellationToken) is { } searched)
+            {
+                found = Result.Ok(searched);
+            }
+
             if (found.IsFailed)
             {
                 return found.ToResult<TeamReport>();
@@ -46,11 +52,12 @@ public class TeamsService(ITeamsGameClient gameClient) : ITeamsService
     {
         var known = teams.DistinctBy(t => t.Id).ToList();
 
-        if (int.TryParse(team, NumberStyles.Integer, CultureInfo.InvariantCulture, out var id))
+        if (Id(team) is { } id)
         {
             return known.FirstOrDefault(t => t.Id == id) is { } byId
                 ? Result.Ok(byId)
-                : Fail($"No team with id {id} in the user's league or competitions.");
+                : Fail($"No team with id {id} in the user's league or competitions, nor among the clubs the database " +
+                       "search has found (search for it first).");
         }
 
         var wanted = Normalise(team);
@@ -70,8 +77,14 @@ public class TeamsService(ITeamsGameClient gameClient) : ITeamsService
             1 => Result.Ok(close[0]),
             > 1 => Fail($"'{team}' matches several teams: {Describe(close)}. Use the full name or the id."),
             _ => Fail($"No team called '{team}' in the user's league or competitions (names are in the game's language). " +
-                      $"Close ones: {Describe(Suggestions(wanted, known))}.")
+                      $"Close ones: {Describe(Suggestions(wanted, known))}. Any other club can be found with the " +
+                      "database search, then asked for by its id.")
         };
+    }
+
+    private static int? Id(string team)
+    {
+        return int.TryParse(team, NumberStyles.Integer, CultureInfo.InvariantCulture, out var id) ? id : null;
     }
 
     // Teams sharing a word start with the name given, else the user's league.
