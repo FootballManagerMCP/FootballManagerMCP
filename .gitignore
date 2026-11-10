@@ -378,3 +378,5 @@ teams.json
 
 # Claude Code MCP config (contains local paths)
 .mcp.json
+# Private planning notes, kept out of the public repo
+aiplays.md
