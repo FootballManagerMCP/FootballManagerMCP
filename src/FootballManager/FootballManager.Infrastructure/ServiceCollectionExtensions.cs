@@ -38,6 +38,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<ITeamsGameClient, TeamsBridgeClient>();
         services.AddScoped<IScoutingGameClient, ScoutingBridgeClient>();
         services.AddScoped<IScoutingEditorGameClient, ScoutingEditorBridgeClient>();
+        services.AddScoped<IPlayerSearchGameClient, PlayerSearchBridgeClient>();
 
         var mappingConfig = new MappingConfig();
         mappingConfig.Register(TypeAdapterConfig.GlobalSettings);

@@ -79,6 +79,23 @@ internal static class DataQueries
         });
     }
 
+    // Binds the query's base from its root, with the query's paths under it, and leaves it all bound: for a write that
+    // keeps the record it targets bound while the game takes it. Main thread; the caller disposes the request.
+    public static PropertyRequest StartWatch(DataQuery query, IReadOnlyList<RequestContext> contexts)
+    {
+        var basePath = query.BasePath ?? throw new ArgumentException("Watching needs a base: base=Team.Tactic.");
+
+        if (RecordPaths.HasSelector(basePath))
+        {
+            throw new ArgumentException("Watching needs a base path without list selectors.");
+        }
+
+        var paths = query.Paths.Select(path => $"{basePath}.{path}").Prepend(basePath).Distinct().ToList();
+
+        return PropertyRequest.Start(
+            RootValue(query.Root), paths, contexts, new Dictionary<string, PropertyCapture> { [basePath] = PropertyCapture.Value });
+    }
+
     private static async Task<List<RequestContext>> ResolveContextPathsAsync(DataQuery query, TimeSpan timeout)
     {
         if (query.ContextPaths is not { Count: > 0 } contextPaths)

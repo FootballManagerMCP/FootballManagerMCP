@@ -33,8 +33,10 @@ public static class ScoutingTools
                  "of war: ranges where knowledge is partial, nothing the user's scouts haven't found out), best graded " +
                  "first. By default the scouting centre's recommended players; 'search' reads the results of the game's " +
                  "player search, which runs over the whole database with the filters its search screen holds (set in the " +
-                 "game), with the screen's status, interest and attribute filter, and total, the number of players it " +
-                 "found. For each: FM id, name, age, club, " +
+                 "game or with run_player_search), with the screen's status, interest and attribute filter, what it " +
+                 "filters on (quick filters, interest type and level, and the rules switched on with the game's labels; " +
+                 "otherConditions counts conditions added in the game's filter editor that aren't listed), and total, " +
+                 "the number of players it found. For each: FM id, name, age, club, " +
                  "nation, positions, the scouts' best position and role in and out of possession (the game's English " +
                  "role keys, as get_role_fit and set_tactic use them), grade (0 'needs watching' to 12 'priority', " +
                  "with the game's label) and verdict, current and potential ability stars (0-20 scale, 20 = five " +
@@ -84,6 +86,55 @@ public static class ScoutingTools
                     (limit is { } max ? $"&limit={max}" : string.Empty);
 
         var response = await http.GetAsync($"/api/v1/scouting/players?{query}");
+        return await response.ReadContentOrError();
+    }
+
+    [McpServerTool(Name = "run_player_search")]
+    [Description("Run the game's player search (its search screen, over the whole player database) with these " +
+                 "filters, in the user's running game. It replaces the rules and quick filters the user's search screen " +
+                 "holds: whatever isn't given is switched off, conditions added by hand in the game's filter editor " +
+                 "(nationality, value, ...) included. The interest setting only changes when given. By default a dry " +
+                 "run: it checks every value against the game and returns what the search holds now (before) and the " +
+                 "plan, changing nothing. Tell the user what their search held, and only call again with apply=true " +
+                 "once they have agreed; the answer then has the search as the game holds it (its filters read back) " +
+                 "and total, how many players it found (the game lists at most 10000). Read the players with " +
+                 "get_scouted_players, source 'search'. Refused while a match is being played.")]
+    public static async Task<string> RunPlayerSearch(
+        IHttpClientFactory httpFactory,
+        [Description("One-click filters to switch on: TransferListed, ListedForLoan, OutOfContract (free agents), " +
+                     "ContractExpiring (at a club, contract running out), HomeGrown, Unhappy, TwoFooted, Goalkeepers, " +
+                     "Defenders, Midfielders, Attackers, HighKnowledge (players the club's scouting knows well), " +
+                     "NoWorkPermitNeeded.")]
+        List<string>? quickFilters = null,
+        [Description("The youngest age, 15 to 45.")]
+        int? minAge = null,
+        [Description("The oldest age, 15 to 45.")]
+        int? maxAge = null,
+        [Description("Positions he must play, any of them: GK, DR, DC, DL, WBR, WBL, DM, MR, MC, ML, AMR, AMC, AML, ST. " +
+                     "Leave out for any position.")]
+        List<string>? positions = null,
+        [Description("How well he must play them: Natural (the default) or Accomplished, Competent, each with the " +
+                     "levels above it; Able (can play there at all) or Unable.")]
+        string? positionFamiliarity = null,
+        [Description("The scouts' grade he needs at least: A+, A, A-, B+, B, B-, C+, C, C-, D, E or F. Only players " +
+                     "the club's scouts have graded pass.")]
+        string? minScoutingGrade = null,
+        [Description("Which move his interest is judged for: TransferOrLoan, TransferOnly, LoanOnly, or NotConsidered " +
+                     "(interest left out). Unchanged when left out.")]
+        string? interestType = null,
+        [Description("How interested he must at least be in it: Interested, SlightInterest (can be persuaded) or " +
+                     "Doubtful. Unchanged when left out.")]
+        string? interestLevel = null,
+        [Description("False (the default) only checks and plans. True runs the search, replacing the user's filters: " +
+                     "only once the user has agreed.")]
+        bool apply = false)
+    {
+        var http = httpFactory.CreateClient("FootballManagerApi");
+
+        var response = await http.PutAsJsonAsync(
+            $"/api/v1/scouting/search?apply={apply.ToString().ToLowerInvariant()}",
+            new { quickFilters, minAge, maxAge, positions, positionFamiliarity, minScoutingGrade, interestType, interestLevel });
+
         return await response.ReadContentOrError();
     }
 

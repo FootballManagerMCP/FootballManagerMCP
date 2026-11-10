@@ -13,7 +13,8 @@ namespace FootballManager.Api.Controllers;
 [ApiController]
 [ApiVersion(Versions.V1)]
 [Route("api/v{version:apiVersion}/[controller]")]
-public class ScoutingController(IScoutingService scoutingService, IScoutingEditingService editingService) : ControllerBase
+public class ScoutingController(
+    IScoutingService scoutingService, IScoutingEditingService editingService, IPlayerSearchService searchService) : ControllerBase
 {
     /// <summary>
     /// The club's scouting, read live from the running game: the scouting centre's counts, the scouts with their
@@ -50,6 +51,21 @@ public class ScoutingController(IScoutingService scoutingService, IScoutingEditi
             source, focusId, pool, includeAttributes, includeHidden, includeReport, limit, cancellationToken);
 
         return result.ToGetResult<ScoutedPlayerList, ScoutedPlayerListResponse>(l => l.Adapt<ScoutedPlayerListResponse>());
+    }
+
+    /// <summary>
+    /// Runs the game's player search with these filters, replacing the rules and quick filters its search screen held
+    /// (the interest only changes when given). Checks everything against the game first and returns what the search
+    /// holds now; writes only with apply=true. The results are then read with source=Search.
+    /// </summary>
+    [HttpPut("search")]
+    public async Task<Results<Ok<PlayerSearchChangeResponse>, BadRequest, NotFound, ProblemHttpResult>> RunSearchAsync(
+        [FromBody] RunPlayerSearchRequest request,
+        [FromQuery] bool apply = false,
+        CancellationToken cancellationToken = default)
+    {
+        var result = await searchService.RunAsync(request.Adapt<PlayerSearchCriteria>(), apply, cancellationToken);
+        return result.ToGetResult<PlayerSearchChange, PlayerSearchChangeResponse>(c => c.Adapt<PlayerSearchChangeResponse>());
     }
 
     /// <summary>

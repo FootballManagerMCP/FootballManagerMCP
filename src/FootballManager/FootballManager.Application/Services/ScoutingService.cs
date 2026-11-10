@@ -28,7 +28,7 @@ public interface IScoutingService
         CancellationToken cancellationToken = default);
 }
 
-public class ScoutingService(IScoutingGameClient gameClient) : IScoutingService
+public class ScoutingService(IScoutingGameClient gameClient, IPlayerSearchGameClient searchClient) : IScoutingService
 {
     public const int DefaultSearchLimit = 50;
     public const int MaxLimit = 200;
@@ -110,6 +110,11 @@ public class ScoutingService(IScoutingGameClient gameClient) : IScoutingService
             var take = source == ScoutingSource.Search ? limit ?? DefaultSearchLimit : (int?)null;
             var page = await gameClient.GetPlayersAsync(
                 source, focusId, pool, attributes, includeHidden, includeReport, take, cancellationToken);
+
+            if (page.Search is not null)
+            {
+                page.Search.Filters = await searchClient.GetFiltersAsync(cancellationToken);
+            }
 
             // The sort is stable: within a grade, players keep the game's own order.
             var players = page.Players.OrderByDescending(p => p.Grade ?? -1).Take(limit ?? int.MaxValue).ToList();

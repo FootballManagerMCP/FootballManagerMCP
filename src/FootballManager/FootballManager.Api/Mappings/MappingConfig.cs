@@ -70,6 +70,18 @@ public class MappingConfig
             .Map(dest => dest.Areas, src => src.Areas ?? new List<string>())
             .Map(dest => dest.Positions, src => src.Positions ?? new List<string>());
 
+        // A search request leaves out what it doesn't filter on.
+        config.NewConfig<RunPlayerSearchRequest, PlayerSearchCriteria>()
+            .Map(dest => dest.QuickFilters, src => src.QuickFilters ?? new List<SearchQuickFilter>())
+            .Map(dest => dest.Positions, src => src.Positions ?? new List<PitchPosition>());
+
+        config.NewConfig<PlayerSearchCriteria, PlayerSearchCriteriaResponse>()
+            .Map(dest => dest.QuickFilters, src => src.QuickFilters.Count > 0 ? src.QuickFilters : null)
+            .Map(dest => dest.Positions, src => src.Positions.Count > 0 ? src.Positions : null);
+
+        config.NewConfig<PlayerSearchChange, PlayerSearchChangeResponse>()
+            .Map(dest => dest.Notes, src => src.Notes.Count > 0 ? src.Notes : null);
+
         config.NewConfig<FocusCreation, FocusCreationResponse>()
             .Map(dest => dest.Planned, src => src.Draft)
             .Map(dest => dest.Notes, src => src.Notes.Count > 0 ? src.Notes : null);

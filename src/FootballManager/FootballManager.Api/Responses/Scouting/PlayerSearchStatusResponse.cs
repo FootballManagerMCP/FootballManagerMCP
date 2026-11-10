@@ -6,4 +6,7 @@ public class PlayerSearchStatusResponse
     public string? Status { get; set; }
     public string? Interest { get; set; }
     public string? Attributes { get; set; }
+
+    /// <summary>What it filters on.</summary>
+    public PlayerSearchFiltersResponse? Filters { get; set; }
 }

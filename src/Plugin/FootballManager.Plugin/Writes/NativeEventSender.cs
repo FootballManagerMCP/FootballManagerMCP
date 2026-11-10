@@ -2,6 +2,7 @@ using FM.GamePlugin;
 using FootballManager.Plugin.Data;
 using SI.Core;
 using SI.Interop;
+using DateTime = System.DateTime;
 
 namespace FootballManager.Plugin.Writes;
 
@@ -9,14 +10,64 @@ namespace FootballManager.Plugin.Writes;
 // formation, the tactic creator's steps): an event id, the record it targets and a value. Target and Data come from
 // the request (Data also as a record built from JSON), or else from the last recorded event of that name, so a real
 // click's contents can serve as the template.
+//
+// With a hold, the base record stays bound from before the event until that long after it, as a screen keeps the
+// records it shows bound while the user edits them, and the answer has the query's paths under the base before and
+// after.
 internal static class NativeEventSender
 {
     private const string TargetField = "Target";
     private const string DataField = "Data";
 
+    private static readonly TimeSpan PollInterval = TimeSpan.FromMilliseconds(50);
+
     public static async Task<string> SendAsync(
         DataQuery query, string eventText, IReadOnlyDictionary<string, ValueSource> given, string? dataJson, bool useTemplate,
-        bool send, TimeSpan timeout)
+        bool send, TimeSpan? hold, TimeSpan timeout)
+    {
+        if (hold is null)
+        {
+            return Json.Serialize(await SendOnceAsync(query, eventText, given, dataJson, useTemplate, send, null, timeout));
+        }
+
+        var (_, contexts) = await DataQueries.ResolveSourceAsync(query, timeout);
+        var watch = await MainThreadDispatcher.RunAsync(() => DataQueries.StartWatch(query, contexts));
+
+        try
+        {
+            var deadline = DateTime.UtcNow + timeout;
+
+            while (DateTime.UtcNow < deadline && !await MainThreadDispatcher.RunAsync(() => watch.IsComplete))
+            {
+                await Task.Delay(PollInterval);
+            }
+
+            var before = await MainThreadDispatcher.RunAsync(watch.Snapshot);
+            var bound = watch.PathBindings[0].CapturedValue
+                        ?? throw new InvalidOperationException($"The game didn't send '{query.BasePath}' in time.");
+            var answer = await SendOnceAsync(query, eventText, given, dataJson, useTemplate, send, bound, timeout);
+
+            await Task.Delay(hold.Value);
+
+            answer["held"] = $"{hold.Value.TotalMilliseconds:0} ms";
+            answer["before"] = before["values"];
+            answer["after"] = (await MainThreadDispatcher.RunAsync(watch.Snapshot))["values"];
+            return Json.Serialize(answer);
+        }
+        finally
+        {
+            await MainThreadDispatcher.RunAsync(() =>
+            {
+                watch.Dispose();
+                return true;
+            });
+        }
+    }
+
+    // The target is the bound record when one is given (it is the query's base), else the base read afresh.
+    private static async Task<Dictionary<string, object?>> SendOnceAsync(
+        DataQuery query, string eventText, IReadOnlyDictionary<string, ValueSource> given, string? dataJson, bool useTemplate,
+        bool send, TypedValue? bound, TimeSpan timeout)
     {
         var eventId = ParseEvent(eventText);
         var name = InteropRecorder.EventName(eventId);
@@ -48,7 +99,7 @@ internal static class NativeEventSender
             var template = useTemplate ? EventRecorder.Last(InteropRecorder.NativeType, name) : null;
 
             // The record the request reads from is the one the event targets, when it has a base (base=Team.Tactic).
-            var baseRecord = query.BasePath is null ? null : TypedValueReader.AsReference(source);
+            var baseRecord = query.BasePath is null ? null : TypedValueReader.AsReference(bound ?? source);
             var sent = new RecordedEvent(InteropRecorder.NativeType, name);
 
             InteropReference? Target()
@@ -104,13 +155,13 @@ internal static class NativeEventSender
                 Subsystems.Get<GameInteropSubsystem>().SendEvent(eventId, target, data);
             }
 
-            return Json.Serialize(new Dictionary<string, object?>
+            return new Dictionary<string, object?>
             {
                 ["event"] = name,
                 ["dryRun"] = !send,
                 ["template"] = template?.Utc.ToString("HH:mm:ss.fff"),
                 ["sent"] = sent.Description
-            });
+            };
         });
     }
 

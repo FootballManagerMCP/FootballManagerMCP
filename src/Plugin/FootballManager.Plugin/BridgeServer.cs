@@ -72,7 +72,7 @@ internal sealed class BridgeServer(int port, string investigationSave, ManualLog
                     + "Writes (confirm=true): /set?<as /get>&path=&value=5|u:5|@Path|@List[Field=value]|@List[Field=value].Field|@List[2].Field.1.Field, "
                     + "/event?<as /get>&type=role|formation|selection|modify&field=Name:<value> (repeatable)&template=none&dryRun=true, "
                     + "/native?<as /get>&event=EventFmx...&field=Target:<value>&field=Data:<value>|data=<json record>|data=null&template=none"
-                    + "&dryRun=true, "
+                    + "&dryRun=true&hold=<ms> (keeps base bound across the event; props= under it are read before and after), "
                     + "/move?index=<0-10>&to=<position mask>|with=<0-10>&inPossession=true|false, "
                     + "/pick?index=<0-10>&player=<database index> (dryRun=true to only build either). "
                     + "Investigation save: /session; /load and /quit (confirm=true, or dryRun=true) open it from the start screen and "
@@ -191,8 +191,12 @@ internal sealed class BridgeServer(int port, string investigationSave, ManualLog
             await WriteGuard.EnsureAllowedAsync(query["confirm"] == "true", timeout);
         }
 
+        var hold = ParseOptionalInt(query["hold"]) is { } milliseconds
+            ? TimeSpan.FromMilliseconds(Math.Clamp(milliseconds, 0, (int)MaxAnswerTimeout.TotalMilliseconds))
+            : (TimeSpan?)null;
+
         return await NativeEventSender.SendAsync(
-            GetQuery(query), name, fields, NullIfEmpty(query["data"]), query["template"] != "none", send, timeout);
+            GetQuery(query), name, fields, NullIfEmpty(query["data"]), query["template"] != "none", send, hold, timeout);
     }
 
     private static async Task<string> MoveAsync(NameValueCollection query)

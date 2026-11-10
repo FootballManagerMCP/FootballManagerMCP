@@ -128,7 +128,28 @@ public class MappingConfig
         config.NewConfig<BridgeSearchStatusDto, PlayerSearchStatus>()
             .Map(dest => dest.Status, src => Text(src.Status))
             .Map(dest => dest.Interest, src => Text(src.Interest))
-            .Map(dest => dest.Attributes, src => Text(src.Attributes));
+            .Map(dest => dest.Attributes, src => Text(src.Attributes))
+            // Read on their own (IPlayerSearchGameClient).
+            .Ignore(dest => dest.Filters!);
+
+        config.NewConfig<BridgeSearchFiltersDto, PlayerSearchFilters>()
+            .Map(dest => dest.InterestType, src => InterestType(src.State.Interest))
+            .Map(dest => dest.InterestLevel, src => InterestLevel(src.State.Interest))
+            .Map(dest => dest.OtherConditions, src => OtherConditions(src));
+
+        config.NewConfig<BridgeSearchRuleDto, SearchRule>()
+            .Map(dest => dest.Name, src => Text(src.Name))
+            .Map(dest => dest.Comparison, src => src.Comparison == null ? null : Text(src.Comparison.Text))
+            .Map(dest => dest.Value, src => RuleValue(src));
+
+        // A rule's values are its options' ids: ages as they are, positions as masks, grades by their letters.
+        config.NewConfig<BridgeSearchChoicesDto, PlayerSearchChoices>()
+            .Map(dest => dest.Ages, src => (src.Age.MinValues ?? new List<BridgeFilterItemDto>())
+                .Where(item => item.Id != null).Select(item => (int)item.Id!.Value).ToList())
+            .Map(dest => dest.Positions, src => SearchPositions(src.Position.Values))
+            .Map(dest => dest.Familiarities, src => Familiarities(src.Position.Comparisons))
+            .Map(dest => dest.Grades, src => (src.Grade.MinValues ?? new List<BridgeFilterItemDto>())
+                .Where(item => item.Id != PlayerSearchConstants.AnyGrade && item.Name != null).Select(item => item.Name!).ToList());
 
         // A top entry carries its own fields, an entry below has them in RowData; both keep their sub-entries in ChildList.
         config.NewConfig<BridgeMenuItemDto, MenuEntry>()
@@ -308,6 +329,71 @@ public class MappingConfig
     private static string? Text(string? value)
     {
         return string.IsNullOrWhiteSpace(value) ? null : value;
+    }
+
+    private static SearchInterestType? InterestType(BridgeInterestOptionDto? interest)
+    {
+        return PlayerSearchConstants.InterestTypeIds
+            .Where(pair => pair.Value == interest?.Id)
+            .Select(pair => (SearchInterestType?)pair.Key)
+            .FirstOrDefault();
+    }
+
+    // The selected type's level; none when interest isn't considered.
+    private static SearchInterestLevel? InterestLevel(BridgeInterestOptionDto? interest)
+    {
+        return PlayerSearchConstants.InterestLevels
+            .Where(pair => pair.Value == interest?.Level)
+            .Select(pair => (SearchInterestLevel?)pair.Key)
+            .FirstOrDefault();
+    }
+
+    // The game's count of conditions, in brackets at the end of its "edit search" label, beyond those read one by one.
+    private static int? OtherConditions(BridgeSearchFiltersDto filters)
+    {
+        var label = filters.State.EditFilterLabel ?? "";
+        var open = label.LastIndexOf('(');
+        var close = label.LastIndexOf(')');
+
+        if (open < 0 || close <= open || !int.TryParse(label[(open + 1)..close], NumberStyles.None, CultureInfo.InvariantCulture, out var count))
+        {
+            return null;
+        }
+
+        var other = count - filters.QuickFilters.Count - filters.Rules.Count;
+        return other > 0 ? other : null;
+    }
+
+    // The rule's value as the comparison uses it: a minimum, a maximum, a range, or the one value.
+    private static string? RuleValue(BridgeSearchRuleDto rule)
+    {
+        var value = rule.Comparison?.Id switch
+        {
+            PlayerSearchConstants.AtLeast => rule.MinValue?.Name,
+            PlayerSearchConstants.AtMost => rule.MaxValue?.Name,
+            PlayerSearchConstants.Between or PlayerSearchConstants.NotBetween when rule is { MinValue.Name: { } min, MaxValue.Name: { } max }
+                => $"{min}-{max}",
+            _ => rule.Value?.Name
+        };
+
+        return Text(value) ?? Text(rule.ValueText);
+    }
+
+    private static List<PitchPosition> SearchPositions(List<BridgeFilterItemDto>? items)
+    {
+        return (items ?? [])
+            .Where(item => item.Id is > 0)
+            .Select(item => PositionMasks.ToPosition((ulong)item.Id!.Value)?.Position)
+            .OfType<PitchPosition>()
+            .ToList();
+    }
+
+    private static List<PositionFamiliarity> Familiarities(List<BridgeCompareFlagDto>? flags)
+    {
+        return (flags ?? [])
+            .Select(flag => PlayerSearchConstants.Familiarities.Where(pair => pair.Value == flag.Id).Select(pair => (PositionFamiliarity?)pair.Key).FirstOrDefault())
+            .OfType<PositionFamiliarity>()
+            .ToList();
     }
 
     private static string? Display(BridgeSortedValueDto? value)

@@ -123,6 +123,12 @@ internal sealed class PropertyRequest : IDisposable
 
     public IReadOnlyList<PropertyBinding> PathBindings => _bindingsByPath;
 
+    // The values as they stand, the request staying bound: the game goes on updating them as they change.
+    public Dictionary<string, object?> Snapshot()
+    {
+        return Results(debug: false);
+    }
+
     // Writes a value the way the game's own dropdowns do: onto the node the value came in on, flagged so the binding
     // tree hands it back to the data handler that serves it, which passes it on to the native game.
     public void Write(PropertyBinding binding, TypedValue value)

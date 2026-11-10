@@ -11,4 +11,7 @@ public class PlayerSearchStatus
 
     /// <summary>The attribute filter, e.g. "No attribute selected".</summary>
     public string? Attributes { get; set; }
+
+    /// <summary>What it filters on.</summary>
+    public PlayerSearchFilters? Filters { get; set; }
 }
