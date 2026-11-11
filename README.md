@@ -395,6 +395,17 @@ MCPFM started as a copilot: an assistant that reads your save and helps you deci
 manage a club on its own while you watch. Next up: training, replying to messages, and the match-day flow
 (continuing the game, team talks, in-match changes).
 
+## Contributing
+
+Issues and pull requests are welcome. Every change to `main` goes through a pull request: CI (the build and the
+tests) has to pass, and a maintainer reviews it.
+
+- Run `dotnet test tests/FootballManager.Tests` before opening one, and add tests for logic that runs without the game.
+- A change to the plugin, or to how a tool reaches the game, can only be checked in the game: say in the pull request
+  what you tried, on which game version.
+- Follow the code around you: Mapster for every mapping, one type per file, braces on every `if`, and comments that
+  say what the game does and why.
+
 ## Licence
 
 [MIT](LICENSE)
