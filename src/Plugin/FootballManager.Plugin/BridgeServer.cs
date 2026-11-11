@@ -19,8 +19,10 @@ internal sealed class BridgeServer(int port, string investigationSave, ManualLog
 
     private static readonly TimeSpan AcceptRetryDelay = TimeSpan.FromMilliseconds(200);
 
-    // Endpoints that change the game, or what it runs.
+    // Endpoints that change the game, or what it runs; and those of them whose dryRun=true only describes the change
+    // (/set has no dry run: it always writes).
     private static readonly HashSet<string> WritePaths = ["/set", "/event", "/native", "/move", "/pick", "/load", "/quit", "/continue"];
+    private static readonly HashSet<string> DryRunPaths = ["/event", "/native", "/move", "/pick", "/load", "/quit", "/continue"];
     private const string WriteHeader = "X-MCPFM-Write";
 
     private readonly HttpListener _listener = new();
@@ -159,14 +161,17 @@ internal sealed class BridgeServer(int port, string investigationSave, ManualLog
     // and may come any way.
     private static string? WriteRefusal(HttpListenerRequest request)
     {
-        if (!WritePaths.Contains(request.Url!.AbsolutePath) || request.QueryString["dryRun"] == "true")
+        var path = request.Url!.AbsolutePath;
+
+        if (!WritePaths.Contains(path) || (DryRunPaths.Contains(path) && request.QueryString["dryRun"] == "true"))
         {
             return null;
         }
 
         return request.HttpMethod == "POST" && request.Headers[WriteHeader] is not null
             ? null
-            : $"This changes the game: send it as a POST with the header {WriteHeader}: true (dryRun=true needs neither).";
+            : $"This changes the game: send it as a POST with the header {WriteHeader}: true (a dry run, where the " +
+              "endpoint has one, needs neither).";
     }
 
     private Func<Task<Reply>>? Route(string path, NameValueCollection query) => path switch

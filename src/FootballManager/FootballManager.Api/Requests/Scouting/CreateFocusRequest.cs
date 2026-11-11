@@ -4,7 +4,7 @@ public class CreateFocusRequest
 {
     public required string Name { get; set; }
 
-    /// <summary>Areas by name in the game's language, optionally with their kind: "Espagne", "nation:Espagne".</summary>
+    /// <summary>Areas by name in the game's language, optionally with their kind: "Spain", "nation:Spain".</summary>
     public List<string>? Areas { get; set; }
 
     /// <summary>Position codes ("DL", "MC"); none means any position.</summary>

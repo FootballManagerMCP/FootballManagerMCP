@@ -151,7 +151,7 @@ next to `fm.exe`.
 ### 3. Get the code
 
 ```powershell
-git clone https://github.com/<owner>/MCPFM.git C:\Code\MCPFM
+git clone https://github.com/FootballManagerMCP/FootballManagerMCP.git C:\Code\MCPFM
 cd C:\Code\MCPFM
 ```
 
@@ -309,7 +309,7 @@ The API listens on port 5120. The MCP server expects it there.
 
 **A tool fails with "The Football Manager API isn't answering on http://localhost:5120"**
 The MCP server can't reach the API. Start it (step 6): `docker compose up -d` from the repo folder, or
-`dotnet run --project srcFootballManagerFootballManager.Api`. Check that <http://localhost:5120/health> answers.
+`dotnet run --project src\FootballManager\FootballManager.Api`. Check that <http://localhost:5120/health> answers.
 
 **A tool fails with "Football Manager isn't answering on ..."**
 The API can't reach the plugin. Check that the game is running, that <http://localhost:5121/status> answers, and that

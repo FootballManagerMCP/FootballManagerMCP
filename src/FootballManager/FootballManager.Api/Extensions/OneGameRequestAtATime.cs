@@ -19,7 +19,15 @@ public sealed class OneGameRequestAtATime(RequestDelegate next)
             return;
         }
 
-        await Gate.WaitAsync(context.RequestAborted);
+        try
+        {
+            await Gate.WaitAsync(context.RequestAborted);
+        }
+        catch (OperationCanceledException) when (context.RequestAborted.IsCancellationRequested)
+        {
+            // The client gave up while waiting its turn: nothing ran, and there's no one to answer.
+            return;
+        }
 
         try
         {

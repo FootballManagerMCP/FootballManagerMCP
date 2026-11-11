@@ -6,7 +6,7 @@ namespace FootballManager.Domain.Scouting;
 /// </summary>
 public sealed record ScoutingArea(long Id, string Name, ScoutingAreaKind Kind, string? Group)
 {
-    /// <summary>"Nation: Espagne", or "Competition: Ligue 1 (France)".</summary>
+    /// <summary>"Nation: Spain", or "Competition: Ligue 1 (France)".</summary>
     public string Display => Group is null || Kind is ScoutingAreaKind.Continent
         ? $"{Kind}: {Name}"
         : $"{Kind}: {Name} ({Group})";

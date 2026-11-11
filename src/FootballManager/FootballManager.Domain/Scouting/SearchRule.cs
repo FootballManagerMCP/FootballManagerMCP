@@ -8,7 +8,7 @@ public class SearchRule
     /// <summary>The rule's name in the game's language, e.g. "Age between (years)".</summary>
     public string? Name { get; set; }
 
-    /// <summary>How the value is compared, e.g. "Entre", "Au moins", "Naturel".</summary>
+    /// <summary>How the value is compared, in the game's language, e.g. "Between", "At least", "Natural".</summary>
     public string? Comparison { get; set; }
 
     /// <summary>The value, e.g. "20-24", "Defender (Left)", "B".</summary>

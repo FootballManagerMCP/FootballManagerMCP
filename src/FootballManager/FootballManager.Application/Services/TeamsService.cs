@@ -78,6 +78,7 @@ public class TeamsService(ITeamsGameClient gameClient) : ITeamsService
         {
             return Fail("Name the team, or give its FM id.");
         }
+
         var close = exact.Count > 0
             ? exact
             : known.Where(t => Normalise(t.Name).Contains(wanted) || wanted.Contains(Normalise(t.Name))).ToList();

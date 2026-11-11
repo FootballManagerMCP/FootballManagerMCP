@@ -3,8 +3,13 @@ using FootballManager.Plugin.Data;
 namespace FootballManager.Plugin.Writes;
 
 // Writes change the user's game, so they need an explicit confirm and are refused while a match is being played.
+//
+// The game answers the next fixture's IsLiveMatch with true during its match and null otherwise (not false). Without
+// a next fixture the path runs through an empty record, which the game never answers: the fixture itself, answered
+// as empty, says there's no match then. Anything else unanswered refuses the write: it fails closed.
 internal static class WriteGuard
 {
+    private const string NextFixturePath = "Team.NextFixture";
     private const string LiveMatchPath = "Team.NextFixture.IsLiveMatch";
 
     public static void EnsureConfirmed(bool confirmed)
@@ -19,29 +24,31 @@ internal static class WriteGuard
     {
         EnsureConfirmed(confirmed);
 
-        var (answered, live) = await MainThreadDispatcher.RunAcrossFramesAsync(
+        var (noFixture, liveAnswered, live) = await MainThreadDispatcher.RunAcrossFramesAsync(
             () => PropertyRequest.Start(
-                GameBindings.ValueOf(GameBindings.FindRoot(DataQueries.HumanRoot)), [LiveMatchPath], []),
-            request => request.IsComplete,
+                GameBindings.ValueOf(GameBindings.FindRoot(DataQueries.HumanRoot)), [NextFixturePath, LiveMatchPath], []),
+            request => request.PathBindings[1].Received || NoFixture(request.PathBindings[0]),
             request =>
             {
-                var binding = request.PathBindings[0];
-                var answer = (binding.Received, binding.Value);
+                var answer = (NoFixture(request.PathBindings[0]), request.PathBindings[1].Received, request.PathBindings[1].Value);
                 request.Dispose();
                 return answer;
             },
             timeout);
 
-        // Fails closed: a write goes ahead only once the game has said no match is being played. Without a next fixture
-        // the game answers null, which is no match.
-        if (!answered)
-        {
-            throw new ArgumentException("The game didn't say whether a match is being played, so nothing was written. Try again.");
-        }
-
-        if (live is true)
+        if (liveAnswered && live is true)
         {
             throw new ArgumentException("A match is being played; writes are refused until it's over.");
         }
+
+        if (!liveAnswered && !noFixture)
+        {
+            throw new ArgumentException("The game didn't say whether a match is being played, so nothing was written. Try again.");
+        }
+    }
+
+    private static bool NoFixture(PropertyBinding fixture)
+    {
+        return fixture.Received && fixture.Value is null;
     }
 }

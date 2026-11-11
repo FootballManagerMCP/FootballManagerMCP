@@ -4,7 +4,7 @@ public class FocusDraftResponse
 {
     public required string Name { get; set; }
 
-    /// <summary>"Nation: Espagne", "Region: Europe centrale (Europe)".</summary>
+    /// <summary>"Nation: Spain", "Region: Central Europe (Europe)".</summary>
     public List<string>? Areas { get; set; }
 
     /// <summary>Position codes; null means any position.</summary>
