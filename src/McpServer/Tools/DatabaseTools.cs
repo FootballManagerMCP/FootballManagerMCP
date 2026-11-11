@@ -24,7 +24,7 @@ public static class DatabaseTools
                  "isn't running.")]
     public static async Task<string> SearchDatabase(
         IHttpClientFactory httpFactory,
-        [Description("A name or part of one: 'Will Ferry', 'Depay', 'Valenciennes'. Accents and case don't matter.")]
+        [Description("A name or part of one: 'Memphis Depay', 'Valenciennes'. Accents and case don't matter.")]
         string query,
         [Description("Only these kinds: Player, Staff, Club, NationalTeam, Nation, Competition, Other. All kinds when " +
                      "left out. Only the first 200 results are looked through for them.")]

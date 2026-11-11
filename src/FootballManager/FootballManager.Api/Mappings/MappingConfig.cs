@@ -184,8 +184,15 @@ public class MappingConfig
     // The game names the player in his confirmation: two say the same when they do with the names left out.
     private static bool SameConfirmation(PlayerScoutingChange player, PlayerScoutingChange first)
     {
-        return player.Confirmation?.Replace(player.PlayerName, string.Empty)
-               == first.Confirmation?.Replace(first.PlayerName, string.Empty);
+        return WithoutName(player) == WithoutName(first);
+    }
+
+    // string.Replace refuses an empty name.
+    private static string? WithoutName(PlayerScoutingChange player)
+    {
+        return string.IsNullOrEmpty(player.PlayerName)
+            ? player.Confirmation
+            : player.Confirmation?.Replace(player.PlayerName, string.Empty);
     }
 
     // A match reads from the user's side: "for" is their team, "against" the opponent.

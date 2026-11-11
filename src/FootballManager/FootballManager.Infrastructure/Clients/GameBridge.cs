@@ -73,17 +73,32 @@ internal sealed class GameBridge(IHttpClientFactory httpClientFactory, ILogger<G
     /// </summary>
     public Task<T> WriteAsync<T>(string path, CancellationToken cancellationToken)
     {
-        return GetAsync<T>(path, cancellationToken, rejectionThrows: true);
+        return GetAsync<T>(path, cancellationToken, rejectionThrows: true, write: true);
     }
 
-    private async Task<T> GetAsync<T>(string path, CancellationToken cancellationToken, bool rejectionThrows = false)
+    // Writes go as POST with a header of the plugin's own: a web page can't send that header to localhost without a
+    // CORS check the plugin never answers, so a page open in a browser can't change the game (plugin 0.13.0 refuses
+    // writes sent any other way).
+    private const string WriteHeader = "X-MCPFM-Write";
+
+    private async Task<T> GetAsync<T>(string path, CancellationToken cancellationToken, bool rejectionThrows = false, bool write = false)
     {
         var http = httpClientFactory.CreateClient(HttpClientName);
         HttpResponseMessage response;
 
         try
         {
-            response = await http.GetAsync(path, cancellationToken);
+            if (write)
+            {
+                // An empty body still states its length: HTTP.sys refuses a POST without one (411).
+                using var request = new HttpRequestMessage(HttpMethod.Post, path) { Content = new ByteArrayContent([]) };
+                request.Headers.Add(WriteHeader, "true");
+                response = await http.SendAsync(request, cancellationToken);
+            }
+            else
+            {
+                response = await http.GetAsync(path, cancellationToken);
+            }
         }
         catch (HttpRequestException exception)
         {

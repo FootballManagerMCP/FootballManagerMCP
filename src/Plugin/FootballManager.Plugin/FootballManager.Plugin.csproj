@@ -78,8 +78,14 @@
     </Reference>
   </ItemGroup>
 
-  <!-- The game locks loaded plugins, so deploying only works while FM is closed. -->
-  <Target Name="DeployToGame" AfterTargets="Build">
+  <!-- Without the game and BepInEx every reference above is missing: one clear error instead of a wall of them. -->
+  <Target Name="RequireGameFiles" BeforeTargets="ResolveAssemblyReferences"
+          Condition="!Exists('$(BepInExDir)\core\BepInEx.Core.dll') Or !Exists('$(BepInExDir)\interop\Il2Cppmscorlib.dll')">
+    <Error Text="The plugin builds against your Football Manager 27 install with BepInEx, and none was found in $(FM27Dir). Install BepInEx and start the game once with it (README steps 1-3), or pass -p:FM27Dir=&lt;your game folder&gt;. The API and the MCP server build without it." />
+  </Target>
+
+  <!-- The game locks loaded plugins, so deploying only works while FM is closed. -p:SkipDeploy=true only builds. -->
+  <Target Name="DeployToGame" AfterTargets="Build" Condition="'$(SkipDeploy)' != 'true'">
     <Copy SourceFiles="$(TargetPath)" DestinationFolder="$(BepInExDir)\plugins\MCPFM" SkipUnchangedFiles="true" Retries="0" ContinueOnError="WarnAndContinue" />
   </Target>
 

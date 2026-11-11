@@ -19,4 +19,10 @@ public class TacticChanges
 
     /// <summary>Players of the starting eleven to place. Naming a player not in it needs all eleven.</summary>
     public List<LineupChange> Lineup { get; set; } = [];
+
+    /// <summary>
+    /// The substitutes by FM id, in the bench's order from its first place; null leaves the bench as it is. Places after
+    /// the last one given keep whoever holds them.
+    /// </summary>
+    public List<int>? Bench { get; set; }
 }

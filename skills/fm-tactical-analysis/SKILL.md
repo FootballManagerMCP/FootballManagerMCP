@@ -141,7 +141,7 @@ When the user asks for a tactic to be built or changed in the game:
    - What their opponents manage against them (`against`) shows where they're weak, e.g. many crosses conceded.
    - Their shapes and regular starters show who you'll face where.
    Don't pick a plan for its own sake: a possession game built to break deep blocks fails against a side that sits
-   off and counters (Hibs away, 25 Oct 2026: 53% of the ball, 10 of 14 shots from distance, 0.8 xG against 3.5).
+   off and counters (one such away game: 53% of the ball, 10 of 14 shots from distance, 0.8 xG against 3.5).
    **Build on what already works.** Check each slot's defensive record in `get_matches` (goals and xG against per
    shape) and keep the structure that protects the back line; adapt the attacking parts to the opponent rather than
    designing a new tactic. A redesign that conceded 6 in 2 matches replaced a setup that had conceded 3 in 10.

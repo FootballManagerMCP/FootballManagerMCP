@@ -82,8 +82,8 @@ review and a match plan with these tools (see [step 8](#8-optional-install-the-t
 ## Safety
 
 - **Reads don't change your game.** Two small exceptions: `search_database` types its text into the game's search box,
-  and `get_team` briefly makes the team it reads the game's current team, then puts yours back. Don't run `get_team`
-  at the same time as `set_tactic`.
+  and `get_team` briefly makes the team it reads the game's current team, then puts yours back. The API handles one
+  request at a time, so nothing else reads or writes while another team is the current one.
 - **Every change is a dry run first.** The tools that change something (`set_tactic`, `run_player_search`,
   `create_recruitment_focus`, `remove_recruitment_focus`, `scout_player`, `scout_team`, `shortlist_player`,
   `offer_trials`, `end_trials`) only check and describe the change unless they're called with `apply: true`. Their
@@ -92,10 +92,14 @@ review and a match plan with these tools (see [step 8](#8-optional-install-the-t
   The dry runs of `scout_player` and `scout_team` show the season's scouting budget (spent and left) and the game's own
   confirmation message, and the game's warnings block the change. `scout_team`, `offer_trials` and `end_trials` only
   apply with the number of players you agreed to: if the plan has changed since the dry run, nothing is sent.
-- **No changes during a match.** The plugin refuses every change while a match is being played.
-- **Your saves are left alone.** Nothing saves the game, continues to the next day, or opens or closes a save. (The
-  plugin can open and quit one save of your choice, a copy for an AI to experiment on alone: see
-  [Configuration](#configuration). It's not exposed as a tool.)
+- **No changes during a match.** The plugin refuses every change while a match is being played, and when it can't
+  tell whether one is.
+- **Web pages can't change your game.** The plugin only takes a change as a POST with its own header, which a page
+  open in your browser can't send to it. The API and Seq listen on this machine only.
+- **Your saves are left alone.** No tool saves the game, continues to the next day, or opens or closes a save. The
+  plugin has endpoints that can: `/continue` presses the Continue button, and `/load` and `/quit` open and quit one
+  save of your choice, a copy for an AI to experiment on alone (see [Configuration](#configuration)). None of them is
+  exposed as a tool, and each needs `confirm=true`.
 - **Hidden data only on request.** Hidden attributes and current/potential ability are only read when asked for
   (`includeHidden`), and the game masks them unless you have the In-Game Editor.
 
@@ -177,7 +181,7 @@ The build copies the plugin to `BepInEx\plugins\MCPFM\FootballManager.Plugin.dll
 1. Start Football Manager 27 and load your career save.
 2. Open <http://localhost:5121/status> in a browser, or run `curl.exe http://localhost:5121/status`.
 
-**Check:** the page starts with `bridge: MCPFM Bridge 0.11.0`. `BepInEx\LogOutput.log` has a line
+**Check:** the page starts with `bridge: MCPFM Bridge 0.13.0`. `BepInEx\LogOutput.log` has a line
 `Listening on http://localhost:5121/`.
 
 ### 6. Start the API
@@ -303,6 +307,10 @@ The API listens on port 5120. The MCP server expects it there.
 
 ## Troubleshooting
 
+**A tool fails with "The Football Manager API isn't answering on http://localhost:5120"**
+The MCP server can't reach the API. Start it (step 6): `docker compose up -d` from the repo folder, or
+`dotnet run --project srcFootballManagerFootballManager.Api`. Check that <http://localhost:5120/health> answers.
+
 **A tool fails with "Football Manager isn't answering on ..."**
 The API can't reach the plugin. Check that the game is running, that <http://localhost:5121/status> answers, and that
 a save is loaded: the plugin only reads a loaded career.
@@ -343,8 +351,10 @@ Change the plugin's port in `mcpfm.bridge.cfg` and `InfrastructureSettings__Game
 - **Game updates can break it** (see [Updating](#updating)).
 - **Some data is the game's, as it keeps it.** Teams far from your competitions have few match numbers. A substitute's
   position is the one of the slot he took: a reshuffle after a change isn't recorded.
+- **First teams only, as tested.** After reading another team, `get_team` puts back your club's first team. If you
+  manage a B team, a youth team or a national team, check your team after using it.
 - **Not yet covered:** training, replying to messages, continuing the game and match days.
-- **No automated tests yet.**
+- **Tests stop at the plugin.** Everything that talks to the game itself is checked by hand, in the game.
 
 ## Development
 
@@ -357,6 +367,7 @@ src/
     FootballManager.Infrastructure/  Clients for the plugin: which game paths and events make up each feature
     FootballManager.Api/             ASP.NET Core API (.NET 10)
   McpServer/                         MCP tools over the API (.NET 10)
+tests/FootballManager.Tests/         Tests of everything that runs without the game (xUnit)
 skills/                              Claude skills that use the tools
 ```
 
@@ -367,8 +378,13 @@ skills/                              Claude skills that use the tools
 - **Which paths make up a feature lives in the API**, in the Infrastructure clients and their constants. Mappings use
   Mapster.
 - **Swagger:** the API in Development mode (as `dotnet run` starts it) serves it at <http://localhost:5120/swagger>.
-- **Build everything:** `dotnet build MCPFM.slnx` (the plugin's copy to the game folder warns if the game is
-  running).
+- **Build everything:** `dotnet build MCPFM.slnx`. The plugin needs the game with BepInEx and says so if they're missing;
+  its copy to the game folder warns if the game is running (`-p:SkipDeploy=true` only builds it).
+- **Tests:** `dotnet test tests/FootballManager.Tests` covers the mappings, the football logic (lineup pairing,
+  substitutions, positions, team lookup) and the services against fake game clients: count guards, skips, partial
+  runs, bench checks, and that writes reach the plugin as it requires. Nothing needs the game. CI
+  (`.github/workflows/ci.yml`) builds and tests everything but the plugin, and builds the API's Docker image, on
+  every push to main and every pull request.
 
 ## Roadmap
 

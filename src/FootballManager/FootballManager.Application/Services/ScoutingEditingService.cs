@@ -252,10 +252,12 @@ public class ScoutingEditingService(IScoutingEditorGameClient editor, IScoutingG
                 change.Players[i].Applied = true;
                 change.Players[i].IsBeingScouted = after?.IsBeingScouted;
             }
-            catch (GameRejectedException exception)
+            catch (Exception exception) when (exception is GameRejectedException or GameUnavailableException)
             {
-                change.Notes.Add($"The game refused to scout {planned[i].Player.Name}: {exception.Message} The run stopped there; " +
-                                 $"{change.Players.Count - i} players weren't sent a scout.");
+                var why = exception is GameRejectedException ? "refused to scout" : "stopped answering while scouting";
+                change.Notes.Add($"The game {why} {planned[i].Player.Name}: {exception.Message} The run stopped there; " +
+                                 $"{change.Players.Count - i} players weren't sent a scout" +
+                                 (exception is GameUnavailableException ? $", and whether {planned[i].Player.Name} was isn't known." : "."));
                 change.Players.RemoveRange(i, change.Players.Count - i);
                 return;
             }
@@ -298,9 +300,11 @@ public class ScoutingEditingService(IScoutingEditorGameClient editor, IScoutingG
         int playerId, ShortlistDuration duration, bool apply, CancellationToken cancellationToken = default)
     {
         return ChangeAsync(playerId, PlayerMenuAction.AddToShortlist, apply, (_, menu) =>
-            menu.Count > 0 && menu[0].Children.Count == 0 && menu[0].CanRun
-                ? Result.Ok(new List<int> { 0 })
-                : Duration(menu, [0], (int)duration, Enum.GetValues<ShortlistDuration>().Length), cancellationToken);
+            menu.Count == 0
+                ? Result.Fail<List<int>>(new ValidationError("playerId", ["The game's menu has no entry to shortlist him."]))
+                : menu[0].Children.Count == 0 && menu[0].CanRun
+                    ? Result.Ok(new List<int> { 0 })
+                    : Duration(menu, [0], (int)duration, Enum.GetValues<ShortlistDuration>().Length), cancellationToken);
     }
 
     public Task<Result<PlayerScoutingChange>> UnshortlistPlayerAsync(int playerId, bool apply, CancellationToken cancellationToken = default)
@@ -515,7 +519,7 @@ public class ScoutingEditingService(IScoutingEditorGameClient editor, IScoutingG
         };
     }
 
-    // "Espagne", "nation:Espagne", or "Premiership (Écosse)" with its group: by name ignoring case and accents, the
+    // "Spain", "nation:Spain", or "Premiership (Scotland)" with its group: by name ignoring case and accents, the
     // kind and group narrowing it down when names repeat.
     private static Result<ScoutingArea> FindArea(string text, List<ScoutingArea> areas)
     {
@@ -535,7 +539,7 @@ public class ScoutingEditingService(IScoutingEditorGameClient editor, IScoutingG
                            || (area.Group is not null && GameNames.Normalise($"{area.Name} ({area.Group})") == normalised))
             .ToList();
 
-        // Otherwise part of the name, with the group (in brackets) narrowing it down: "Championship (Écosse)".
+        // Otherwise part of the name, with the group (in brackets) narrowing it down: "Championship (Scotland)".
         var (name, group) = SplitGroup(normalised);
         var close = exact.Count > 0
             ? exact

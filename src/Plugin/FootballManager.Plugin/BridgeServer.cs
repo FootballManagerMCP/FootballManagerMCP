@@ -1,4 +1,5 @@
 using System.Collections.Specialized;
+using System.IO;
 using System.Net;
 using System.Text;
 using BepInEx.Logging;
@@ -15,6 +16,12 @@ internal sealed class BridgeServer(int port, string investigationSave, ManualLog
     private static readonly TimeSpan RequestTimeout = TimeSpan.FromSeconds(75);
     private static readonly TimeSpan DefaultAnswerTimeout = TimeSpan.FromSeconds(3);
     private static readonly TimeSpan MaxAnswerTimeout = TimeSpan.FromSeconds(30);
+
+    private static readonly TimeSpan AcceptRetryDelay = TimeSpan.FromMilliseconds(200);
+
+    // Endpoints that change the game, or what it runs.
+    private static readonly HashSet<string> WritePaths = ["/set", "/event", "/native", "/move", "/pick", "/load", "/quit", "/continue"];
+    private const string WriteHeader = "X-MCPFM-Write";
 
     private readonly HttpListener _listener = new();
 
@@ -46,6 +53,13 @@ internal sealed class BridgeServer(int port, string investigationSave, ManualLog
             {
                 return;
             }
+            catch (Exception exception)
+            {
+                // One bad connection mustn't stop the bridge: keep listening.
+                log.LogWarning($"Accepting a request failed: {exception.Message}");
+                await Task.Delay(AcceptRetryDelay);
+                continue;
+            }
 
             _ = HandleAsync(context);
         }
@@ -54,12 +68,17 @@ internal sealed class BridgeServer(int port, string investigationSave, ManualLog
     private async Task HandleAsync(HttpListenerContext context)
     {
         Reply reply;
+        using var expiry = new CancellationTokenSource();
 
         try
         {
             var route = Route(context.Request.Url!.AbsolutePath, context.Request.QueryString);
 
-            if (route is null)
+            if (route is not null && WriteRefusal(context.Request) is { } refusal)
+            {
+                reply = Reply.Text(403, refusal);
+            }
+            else if (route is null)
             {
                 reply = Reply.Text(404, "Unknown endpoint. Try /status, /ui, /find?text=, /table, /catalog?set=property|reference|context, "
                     + "/bindings?path=&depth=, /schema?type=person|team|club, /names?ids=, /instructions, /player-instructions, "
@@ -77,6 +96,8 @@ internal sealed class BridgeServer(int port, string investigationSave, ManualLog
                     + "/pick?index=<0-10>&player=<database index> (dryRun=true to only build either). "
                     + "Investigation save: /session; /load and /quit (confirm=true, or dryRun=true) open it from the start screen and "
                     + "quit the game with it or the start screen loaded, never any other save. "
+                    + "Writes (/set, /event, /native, /move, /pick, /load, /quit, /continue) are POST requests with the header "
+                    + "X-MCPFM-Write: true, except dry runs (dryRun=true). "
                     + "Continue: /continue (confirm=true, or dryRun=true) presses the Continue button as a click does; its state is "
                     + "/get?root=continue&props=State. "
                     + "Recording: /events?start=true[&interop=false][&writes=false][&ui=false][&data=true]|stop=true|clear=true, "
@@ -84,11 +105,21 @@ internal sealed class BridgeServer(int port, string investigationSave, ManualLog
             }
             else
             {
+                // The work this request queues for the main thread expires with it.
+                MainThreadDispatcher.RequestExpiry.Value = expiry.Token;
                 var task = route();
 
-                reply = await Task.WhenAny(task, Task.Delay(RequestTimeout)) == task
-                    ? await task
-                    : Reply.Text(504, "The game's main thread didn't answer in time (is the game busy processing?).");
+                if (await Task.WhenAny(task, Task.Delay(RequestTimeout)) == task)
+                {
+                    reply = await task;
+                }
+                else
+                {
+                    // Whatever hasn't started yet won't: a retry mustn't find this one running too once the game resumes.
+                    expiry.Cancel();
+                    reply = Reply.Text(504, "The game's main thread didn't answer in time (is the game busy processing?). " +
+                                            "What hadn't started was dropped.");
+                }
             }
         }
         catch (ArgumentException exception)
@@ -101,12 +132,41 @@ internal sealed class BridgeServer(int port, string investigationSave, ManualLog
             log.LogError(exception);
         }
 
-        var bytes = Encoding.UTF8.GetBytes(reply.Body);
-        context.Response.StatusCode = reply.Status;
-        context.Response.ContentType = reply.ContentType;
-        context.Response.ContentLength64 = bytes.Length;
-        await context.Response.OutputStream.WriteAsync(bytes);
-        context.Response.Close();
+        try
+        {
+            var bytes = Encoding.UTF8.GetBytes(reply.Body);
+            context.Response.StatusCode = reply.Status;
+            context.Response.ContentType = reply.ContentType;
+            context.Response.ContentLength64 = bytes.Length;
+            await context.Response.OutputStream.WriteAsync(bytes);
+            context.Response.Close();
+        }
+        catch (Exception exception) when (exception is HttpListenerException or IOException or ObjectDisposedException or InvalidOperationException)
+        {
+            // The client left before the answer: nothing to send it to.
+            try
+            {
+                context.Response.Abort();
+            }
+            catch (Exception)
+            {
+            }
+        }
+    }
+
+    // A write comes as POST with the bridge's own header, which a web page can't send to localhost without a CORS
+    // preflight this server never answers: a page open in a browser can't change the game. A dry run changes nothing
+    // and may come any way.
+    private static string? WriteRefusal(HttpListenerRequest request)
+    {
+        if (!WritePaths.Contains(request.Url!.AbsolutePath) || request.QueryString["dryRun"] == "true")
+        {
+            return null;
+        }
+
+        return request.HttpMethod == "POST" && request.Headers[WriteHeader] is not null
+            ? null
+            : $"This changes the game: send it as a POST with the header {WriteHeader}: true (dryRun=true needs neither).";
     }
 
     private Func<Task<Reply>>? Route(string path, NameValueCollection query) => path switch

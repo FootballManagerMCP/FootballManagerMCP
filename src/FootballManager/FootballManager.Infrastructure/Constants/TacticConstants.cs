@@ -10,6 +10,20 @@ internal static class TacticConstants
     public const string SquadPath = "Team.Players";
     public const string TeamPath = "Team";
 
+    // The matchday squad, as the lineup's player dropdowns list it: a row per place, {RowData {Index, player}}, the
+    // bench's places (11 on) first, then the eleven. A pick into a place is the game's EventFmxTeamSelectionPickPlayer
+    // on the tactic, with a dropdown row naming the player, where he is now (-1 outside the matchday squad) and the
+    // place; the plugin's /pick builds it for the eleven, and the same record goes through /native for the bench.
+    public const string SelectionDropdown = "TeamSelectionIndexDropdown";
+    public const int FirstBenchIndex = 11;
+    public const string PickPlayerEvent = "EventFmxTeamSelectionPickPlayer";
+    public const int PickPlayerOption = 2;
+    public const int OutsideMatchdaySquad = -1;
+
+    // From the team (the base of a bench pick): its tactic and its players.
+    public const string TacticFromTeam = "Tactic";
+    public const string PlayersFromTeam = "Players";
+
     // Contexts.
     public const string TeamSelectionIndex = "TeamSelectionIndex";
     public const string InPossession = "InPossession";

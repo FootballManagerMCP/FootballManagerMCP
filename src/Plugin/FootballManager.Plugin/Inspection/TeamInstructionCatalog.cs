@@ -20,7 +20,7 @@ internal static class TeamInstructionCatalog
         ["DefensiveLineMuchHigher"] = "MuchHigherDefensiveLine",
         ["LineOfEngagementHigh"] = "LineOfEngagementHigher",
 
-        // Slot 2 held WasteTime while its screen showed "Normal" (2026-11-04); the other two follow.
+        // A tactic holding WasteTime shows "Normal" on screen; the other two follow.
         ["WasteTimeLessOften"] = "TimeWastingNone",
         ["WasteTimeStandard"] = "WasteTime",
         ["WasteTimeMoreOften"] = "WasteTimeExtreme"

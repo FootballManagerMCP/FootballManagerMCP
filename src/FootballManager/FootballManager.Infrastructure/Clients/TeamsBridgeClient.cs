@@ -166,14 +166,18 @@ internal sealed class TeamsBridgeClient(GameBridge bridge, GameVocabulary vocabu
         var away = (await awayStats).Items;
         var outOfPossession = (await withoutBall).Items;
 
-        var matches = (await fixtures).Items.Select((fixture, index) => Match(
-            teamId,
-            fixture.Values,
-            home.ElementAtOrDefault(index)?.Values.Stats,
-            away.ElementAtOrDefault(index)?.Values.Stats,
-            outOfPossession.ElementAtOrDefault(index)?.Values.Entries ?? [],
-            players,
-            names));
+        // The stats lists follow the fixture list row for row: undated fixtures are left out after pairing.
+        var matches = (await fixtures).Items
+            .Select((fixture, index) => (Fixture: fixture.Values, Index: index))
+            .Where(row => row.Fixture.HasDate)
+            .Select(row => Match(
+                teamId,
+                row.Fixture,
+                home.ElementAtOrDefault(row.Index)?.Values.Stats,
+                away.ElementAtOrDefault(row.Index)?.Values.Stats,
+                outOfPossession.ElementAtOrDefault(row.Index)?.Values.Entries ?? [],
+                players,
+                names));
 
         return new TeamSeason
         {

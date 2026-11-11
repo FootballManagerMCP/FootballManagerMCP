@@ -1,8 +1,9 @@
 services:
   seq:
     image: datalust/seq:latest
+    # Bound to this machine only: Seq runs without authentication.
     ports:
-      - "5342:80"
+      - "127.0.0.1:5342:80"
     environment:
       - ACCEPT_EULA=Y
       - SEQ_FIRSTRUN_NOAUTHENTICATION=true
@@ -12,8 +13,9 @@ services:
     build:
       context: ./src
       dockerfile: FootballManager/FootballManager.Api/Dockerfile
+    # Bound to this machine only: the API has no authentication and changes the game.
     ports:
-      - "5120:8080"
+      - "127.0.0.1:5120:8080"
     # Football Manager runs on the host; its plugin only answers requests addressed to localhost.
     extra_hosts:
       - "host.docker.internal:host-gateway"

@@ -25,7 +25,7 @@ internal sealed class MatchesBridgeClient(GameBridge bridge, GameVocabulary voca
         return new TeamFixtures
         {
             TeamName = (await team).TeamName ?? string.Empty,
-            Fixtures = Summaries(await fixtures, (await team).TeamId)
+            Fixtures = Summaries(await fixtures, (await team).TeamId).Select(dated => dated.Summary).ToList()
         };
     }
 
@@ -38,14 +38,15 @@ internal sealed class MatchesBridgeClient(GameBridge bridge, GameVocabulary voca
         await Task.WhenAll(team, fixtures, squad);
 
         var summaries = Summaries(await fixtures, (await team).TeamId);
-        var index = summaries.FindIndex(match => match.Date == date);
+        var found = summaries.FindIndex(match => match.Summary.Date == date);
 
-        if (index < 0)
+        if (found < 0)
         {
             return null;
         }
 
-        var summary = summaries[index];
+        // The per-match reads go by the fixture's place in the whole list.
+        var (summary, index) = summaries[found];
 
         if (!summary.IsPlayed)
         {
@@ -102,15 +103,20 @@ internal sealed class MatchesBridgeClient(GameBridge bridge, GameVocabulary voca
             gapsExpected: true);
     }
 
-    private static List<MatchSummary> Summaries(BridgeListDto<BridgeFixtureDto> fixtures, int? teamId)
+    // Each dated fixture (one still to be arranged has no date to show) with its place in the fixture list.
+    private static List<(MatchSummary Summary, int Index)> Summaries(BridgeListDto<BridgeFixtureDto> fixtures, int? teamId)
     {
-        return fixtures.Items.Select(fixture =>
-        {
-            var summary = fixture.Values.Adapt<MatchSummary>();
-            summary.TeamId = teamId ?? 0;
-            summary.Formation = summary.IsPlayed ? LineupShapes.Of(fixture.Values.Lineup ?? []) : null;
-            return summary;
-        }).ToList();
+        return fixtures.Items
+            .Select((fixture, index) => (Fixture: fixture.Values, Index: index))
+            .Where(row => row.Fixture.HasDate)
+            .Select(row =>
+            {
+                var summary = row.Fixture.Adapt<MatchSummary>();
+                summary.TeamId = teamId ?? 0;
+                summary.Formation = summary.IsPlayed ? LineupShapes.Of(row.Fixture.Lineup ?? []) : null;
+                return (summary, row.Index);
+            })
+            .ToList();
     }
 
     // The squad by database index, which is how a match refers to its players, with each one's place in the squad

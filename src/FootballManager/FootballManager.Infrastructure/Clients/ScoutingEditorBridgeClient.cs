@@ -148,25 +148,17 @@ internal sealed class ScoutingEditorBridgeClient(
 
     public async Task<Dictionary<int, ScoutedPlayer>> FindPlayersAsync(IReadOnlyCollection<int> playerIds, CancellationToken cancellationToken = default)
     {
-        var found = new Dictionary<int, ScoutedPlayer>();
+        // The club's own squad (trialists are in it) and the scouting lists first: they reach a player by his id, where
+        // the player search reaches him by his place in its results, which moves as the game updates them.
+        List<(string Path, int? SearchType)> lists =
+            [($"{TeamConstants.OwnTeam}.{TeamConstants.Players}", null), .. await ScoutingListsAsync(cancellationToken)];
 
-        // Where the player search listed them first, one read each: a batch mostly comes from a search, and the
-        // scouting lists are read whole.
-        foreach (var id in playerIds)
+        var found = await FindInAsync(playerIds, lists, cancellationToken);
+
+        // Then where the player search listed the rest, one read each.
+        foreach (var id in Missing(playerIds, found))
         {
             if (await FindInSearchAsync(id, cancellationToken) is { } player)
-            {
-                found[id] = player;
-            }
-        }
-
-        // The club's own squad too: players on trial are in it.
-        if (Missing(playerIds, found) is { Count: > 0 } rest)
-        {
-            List<(string Path, int? SearchType)> lists =
-                [.. await ScoutingListsAsync(cancellationToken), ($"{TeamConstants.OwnTeam}.{TeamConstants.Players}", null)];
-
-            foreach (var (id, player) in await FindInAsync(rest, lists, cancellationToken))
             {
                 found[id] = player;
             }
@@ -305,7 +297,7 @@ internal sealed class ScoutingEditorBridgeClient(
 
     public async Task<HashSet<PlayerMenuAction>> GetOfferedActionsAsync(int playerId, CancellationToken cancellationToken = default)
     {
-        var offered = await OfferedAsync(await LocateAsync(playerId, cancellationToken), cancellationToken);
+        var offered = await OfferedAsync(await PlaceAsync(playerId, cancellationToken), cancellationToken);
 
         return Enum.GetValues<PlayerMenuAction>()
             .Where(action => offered.Contains(ActionKey(ScoutingConstants.ActionIdOf(action))))
@@ -314,7 +306,7 @@ internal sealed class ScoutingEditorBridgeClient(
 
     public async Task<List<MenuEntry>?> GetMenuAsync(int playerId, PlayerMenuAction action, CancellationToken cancellationToken = default)
     {
-        var player = await LocateAsync(playerId, cancellationToken);
+        var player = await PlaceAsync(playerId, cancellationToken);
         var actionId = ScoutingConstants.ActionIdOf(action);
 
         if (!(await OfferedAsync(player, cancellationToken)).Contains(ActionKey(actionId)))
@@ -352,7 +344,7 @@ internal sealed class ScoutingEditorBridgeClient(
             throw new ArgumentException("Name the menu entry to pick.", nameof(entry));
         }
 
-        var player = await LocateAsync(playerId, cancellationToken);
+        var player = await PlaceAsync(playerId, cancellationToken);
 
         // The payload of the entry, where the game keeps it: on a top entry itself, on one below in its RowData.
         var payload = $"@{ScoutingConstants.MenuItems}[{Format(entry[0])}]"
@@ -607,6 +599,32 @@ internal sealed class ScoutingEditorBridgeClient(
         }
 
         return _players[playerId];
+    }
+
+    // Where the player is now. A place in the player search's results is checked first: the game reorders them as it
+    // updates them (trialists arriving, say), and a stale place would reach a neighbour. He's looked for again then.
+    private async Task<(string Root, string Path, int? SearchType)> PlaceAsync(int playerId, CancellationToken cancellationToken)
+    {
+        var place = await LocateAsync(playerId, cancellationToken);
+
+        if (!IsSearchPlace(place) || await ReadAtAsync(playerId, place, cancellationToken) is not null)
+        {
+            return place;
+        }
+
+        _players.Remove(playerId);
+
+        return await FindPlayerAsync(playerId, cancellationToken) is not null
+            ? _players[playerId]
+            : throw new GameRejectedException(
+                $"Player {playerId} is no longer where the player search listed him, nor in another list: list the search again.");
+    }
+
+    // A place in the player search by index, as its listed results were seen, rather than by the player's id.
+    private static bool IsSearchPlace((string Root, string Path, int? SearchType) place)
+    {
+        return place.SearchType == ScoutingConstants.PlayerSearch
+               && !place.Path.Contains($"[{GameConstants.UniqueId}=", StringComparison.Ordinal);
     }
 
     // The menu action for the player: game.Action, picked by its id, for the player as its only record.

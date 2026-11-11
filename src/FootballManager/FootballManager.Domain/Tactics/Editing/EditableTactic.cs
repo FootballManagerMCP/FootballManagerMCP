@@ -19,6 +19,9 @@ public class EditableTactic
     /// <summary>The eleven slots, by the game's index (0 to 10).</summary>
     public List<EditableSlot> Lineup { get; set; } = [];
 
+    /// <summary>The substitutes' places, as many as the competition allows, in order (empty ones included).</summary>
+    public List<BenchPlace> Bench { get; set; } = [];
+
     /// <summary>Every first-team player, by FM id.</summary>
     public Dictionary<int, string> Squad { get; set; } = [];
 }

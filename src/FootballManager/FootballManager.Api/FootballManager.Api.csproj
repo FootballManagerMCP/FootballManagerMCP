@@ -15,6 +15,9 @@
   </ItemGroup>
 
   <PropertyGroup>
+    <!-- For Swagger. Not every type needs a doc comment: no warning for those without. -->
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <NoWarn>$(NoWarn);CS1591;CS1573</NoWarn>
     <TargetFramework>net10.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>

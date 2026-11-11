@@ -38,7 +38,10 @@ public interface ITacticEditorGameClient
     /// <summary>Moves lineup slot <paramref name="index"/> to a spot no other slot holds in that phase.</summary>
     Task MoveAsync(int index, bool inPossession, TacticalPosition position, CancellationToken cancellationToken = default);
 
-    /// <summary>Puts a player in lineup slot <paramref name="index"/>; a substitute swaps places with the starter.</summary>
+    /// <summary>
+    /// Puts a player in matchday squad place <paramref name="index"/>: 0-10 the eleven, from 11 the bench. A player
+    /// already in the matchday squad swaps places with the place's player; one from outside it takes the place.
+    /// </summary>
     Task PickAsync(int index, int playerId, CancellationToken cancellationToken = default);
 
     Task<WriteOutcome> SetRoleAsync(int index, bool inPossession, string role, CancellationToken cancellationToken = default);

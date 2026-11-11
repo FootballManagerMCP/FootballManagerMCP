@@ -10,7 +10,7 @@ public class PlayerScoutingChange
     public required string PlayerName { get; set; }
     public PlayerMenuAction Action { get; set; }
 
-    /// <summary>The menu entry picked, as the game labels it: "Assign scout > David Pleat (Scout) > 1 week".</summary>
+    /// <summary>The menu entry picked, as the game labels it: "Assign scout > [a scout's name] (Scout) > 1 week".</summary>
     public required string Choice { get; set; }
 
     /// <summary>What the game asks the user to confirm for this entry (for a scout: the costs to expect), when it asks.</summary>

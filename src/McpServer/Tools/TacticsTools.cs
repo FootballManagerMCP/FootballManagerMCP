@@ -63,9 +63,9 @@ public static class TacticsTools
                  "phase with their options, and every role key. Each comes as a key (the game's English identifier, " +
                  "whatever language the game runs in), which is what set_tactic takes, and the game's label. Formation " +
                  "keys are the game's internal names and don't always match the shape it shows (343DMWide is labelled " +
-                 "5-2-3): go by the label. Which roles " +
-                 "a position offers, and who suits them, comes from get_role_fit. Fails with a 503 when the game isn't " +
-                 "running, or until the tactics screen has been opened once in the game session.")]
+                 "5-2-3): go by the label. Which roles a position offers, and who suits them, comes from " +
+                 "get_role_fit. Fails with a 503 when the game isn't running, or until the tactics screen has been " +
+                 "opened once in the game session.")]
     public static async Task<string> GetTacticOptions(IHttpClientFactory httpFactory)
     {
         var http = httpFactory.CreateClient("FootballManagerApi");
@@ -80,7 +80,8 @@ public static class TacticsTools
                  "By default this is a dry run: it checks every key and returns the planned steps without changing " +
                  "anything. Show the user the plan, and only call again with apply=true once they have agreed. " +
                  "The game applies changes in its own order: switching to the slot, style, mentality, team " +
-                 "instructions, formations, then the lineup (picks, position moves, roles, player instructions); the " +
+                 "instructions, formations, then the lineup (picks, position moves, roles, player instructions), then the " +
+                 "bench (substitutes); the " +
                  "first failed step stops the rest, and the answer reports each step as Done, Failed or Skipped. " +
                  "Effects to tell the user about: writing a slot makes it the tactic the team plays, and it stays " +
                  "active afterwards; a new style resets the mentality and every team instruction to that style's own " +
@@ -108,6 +109,12 @@ public static class TacticsTools
                      "position for both phases; otherwise list only the players to change. Exactly one goalkeeper, and " +
                      "the goalkeeper's slot stays GK.")]
         List<LineupEntry>? lineup = null,
+        [Description("The substitutes by FM id, in the bench's order from its first place (the bench has as many " +
+                     "places as the competition allows; the answer says how many if too many are given). Players not " +
+                     "in the starting eleven, nor trialists, who can't be picked. Places after the last one given keep " +
+                     "whoever holds them. Left out, the bench stays as it is, and the answer warns when it's empty: " +
+                     "always set it when setting up a match.")]
+        List<int>? bench = null,
         [Description("False (the default) only checks and plans. True writes to the game: only once the user has " +
                      "agreed to the plan.")]
         bool apply = false)
@@ -116,7 +123,7 @@ public static class TacticsTools
 
         var response = await http.PostAsJsonAsync(
             $"/api/v1/tactics?apply={apply.ToString().ToLowerInvariant()}",
-            new { slot, style, mentality, teamInstructions, formation, lineup });
+            new { slot, style, mentality, teamInstructions, formation, lineup, bench });
 
         return await response.ReadContentOrError();
     }

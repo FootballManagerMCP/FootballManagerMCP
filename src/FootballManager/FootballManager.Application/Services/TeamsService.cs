@@ -48,26 +48,36 @@ public class TeamsService(ITeamsGameClient gameClient) : ITeamsService
     }
 
     // By FM id, by name (ignoring case and accents), or by a name that contains or is contained in the one given.
-    private static Result<KnownTeam> Find(string team, List<KnownTeam> teams)
+    internal static Result<KnownTeam> Find(string team, List<KnownTeam> teams)
     {
         var known = teams.DistinctBy(t => t.Id).ToList();
+        var wanted = Normalise(team);
+        var exact = wanted.Length == 0 ? [] : known.Where(t => Normalise(t.Name) == wanted).ToList();
+
+        // A name made of digits ("1860") is a name first, then an id.
+        if (exact.Count == 1)
+        {
+            return Result.Ok(exact[0]);
+        }
 
         if (Id(team) is { } id)
         {
-            return known.FirstOrDefault(t => t.Id == id) is { } byId
-                ? Result.Ok(byId)
-                : Fail($"No team with id {id} in the user's league or competitions, nor among the clubs the database " +
-                       "search has found (search for it first).");
-        }
+            if (known.FirstOrDefault(t => t.Id == id) is { } byId)
+            {
+                return Result.Ok(byId);
+            }
 
-        var wanted = Normalise(team);
+            if (exact.Count == 0 && !known.Any(t => Normalise(t.Name).Contains(wanted)))
+            {
+                return Fail($"No team with id {id} in the user's league or competitions, nor among the clubs the database " +
+                            "search has found (search for it first).");
+            }
+        }
 
         if (wanted.Length == 0)
         {
             return Fail("Name the team, or give its FM id.");
         }
-
-        var exact = known.Where(t => Normalise(t.Name) == wanted).ToList();
         var close = exact.Count > 0
             ? exact
             : known.Where(t => Normalise(t.Name).Contains(wanted) || wanted.Contains(Normalise(t.Name))).ToList();

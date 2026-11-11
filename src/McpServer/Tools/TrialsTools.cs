@@ -58,7 +58,9 @@ public static class TrialsTools
                  "trial's, since the game words a transfer offer's withdrawal the same way) and the game's " +
                  "confirmation, in the game's language. Show the user who goes and ask. To apply, call again with " +
                  "apply=true and expectedPlayers set to the dry run's count: if the plan has changed since, nothing is " +
-                 "sent. Each player's trial state is read back after sending. Applying stops at the first player the " +
+                 "sent. Each player's trial state is read back after sending: Leaving once the game has taken the end " +
+                 "of his trial (he stays listed, on trial, until the game's next day; ending it again is skipped), None " +
+                 "once a waiting offer is withdrawn. Applying stops at the first player the " +
                  "game refuses and says so, keeping the ones already done. About a second per player. Refused while a " +
                  "match is being played.")]
     public static async Task<string> EndTrials(

@@ -152,11 +152,11 @@ public static class ScoutingTools
         IHttpClientFactory httpFactory,
         [Description("The focus's name, as the user will see it in the game; it must differ from the club's other focuses.")]
         string name,
-        [Description("Where to scout, by name in the game's display language (e.g. 'Espagne', 'Europe centrale', " +
-                     "'Amérique du S.'), each a competition, nation, region or continent. Names repeat across kinds " +
+        [Description("Where to scout, by name in the game's display language (e.g. 'Spain', 'Central Europe', " +
+                     "'South America' in an English game), each a competition, nation, region or continent. Names repeat across kinds " +
                      "(a nation and a continent, a region and its continent): prefix the kind to pick one, e.g. " +
-                     "'nation:Espagne', 'region:Europe centrale', 'continent:Europe', 'competition:Ligue 1', or add its " +
-                     "group in brackets, e.g. 'Premiership (Écosse)'.")]
+                     "'nation:Spain', 'region:Central Europe', 'continent:Europe', 'competition:Ligue 1', or add its " +
+                     "group in brackets, e.g. 'Premiership (Scotland)'.")]
         List<string>? areas = null,
         [Description("Position codes to look for: GK, DR, DCR, DC, DCL, DL, WBR, DMR, DM, DML, WBL, MR, MCR, MC, MCL, " +
                      "ML, AMR, AMCR, AMC, AMCL, AML, STR, ST, STL. Leave out for any position.")]
@@ -215,8 +215,8 @@ public static class ScoutingTools
         IHttpClientFactory httpFactory,
         [Description("The player's FM id, from get_scouted_players or search_database.")]
         int playerId,
-        [Description("Who should watch him: a scout's name as get_scouting lists it (the start of it is enough, e.g. " +
-                     "'Mark Cooper'). The game also offers the director of football and some coaches. Leave out for " +
+        [Description("Who should watch him: a scout's name as get_scouting lists it (the start of it is enough). The " +
+                     "game also offers the director of football and some coaches. Leave out for " +
                      "any scout.")]
         string? scout = null,
         [Description("How long: UntilFullKnowledge (the default), OneWeek, TwoWeeks, OneMonth, TwoMonths, ThreeMonths, " +

@@ -1,0 +1,31 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Tests of everything that runs without the game: mappings, pure logic, and the services against fake game
+       clients. The plugin isn't here: it builds only against the game's own files. -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.13.0" />
+    <PackageReference Include="NSubstitute" Version="5.3.0" />
+    <PackageReference Include="xunit" Version="2.9.3" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="3.1.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="Xunit" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\FootballManager\FootballManager.Api\FootballManager.Api.csproj" />
+    <ProjectReference Include="..\..\src\FootballManager\FootballManager.Application\FootballManager.Application.csproj" />
+    <ProjectReference Include="..\..\src\FootballManager\FootballManager.Domain\FootballManager.Domain.csproj" />
+    <ProjectReference Include="..\..\src\FootballManager\FootballManager.Infrastructure\FootballManager.Infrastructure.csproj" />
+    <ProjectReference Include="..\..\src\McpServer\McpServer.csproj" />
+  </ItemGroup>
+
+</Project>

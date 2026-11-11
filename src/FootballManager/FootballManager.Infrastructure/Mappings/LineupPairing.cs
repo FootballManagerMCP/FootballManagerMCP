@@ -7,7 +7,7 @@ namespace FootballManager.Infrastructure.Mappings;
 // Which out-of-possession entry of a past match's lineup is each starter's. The game keeps every player in his own
 // slot in both phases, but the out-of-possession positions, with their roles, come in the out-of-possession
 // formation's own slot order: when the two formations order their slots differently, a slot holds another player's
-// entry (found 2026-11-10: Kostov AMC and Jota AML came back as ML and AMC, positions neither can play, where the
+// entry (an AMC's and an AML's entries can come back as ML and AMC, positions neither player can play, where the
 // live tactic has them AMC and ML). The game keeps no link between the two phases' slots, so each starter is given
 // the entry that moves the eleven least over the pitch, his own slot's when that ties.
 internal static class LineupPairing

@@ -83,8 +83,15 @@ internal sealed class TacticEditorBridgeClient(
         var formationWithoutBall = FormationAsync(inPossession: false, cancellationToken);
         var withBall = LineupAsync(inPossession: true, cancellationToken);
         var withoutBall = LineupAsync(inPossession: false, cancellationToken);
+        var selection = SelectionAsync(cancellationToken);
 
-        await Task.WhenAll(keys, settings, instructions, squad, formationWithBall, formationWithoutBall, withBall, withoutBall);
+        await Task.WhenAll(keys, settings, instructions, squad, formationWithBall, formationWithoutBall, withBall, withoutBall, selection);
+
+        // The squad by database index, which is how the matchday squad's places name their players.
+        var byDatabaseIndex = (await squad).Items
+            .Where(player => player.Source?.Index is not null)
+            .GroupBy(player => player.Source!.Index!.Value)
+            .ToDictionary(group => group.Key, group => group.First().Values);
 
         var names = await keys;
         var current = await settings;
@@ -108,6 +115,13 @@ internal sealed class TacticEditorBridgeClient(
             // Both phases answer in lineup order, one row per slot.
             Lineup = Enumerable.Range(0, Math.Min(inPossession.Count, outOfPossession.Count))
                 .Select(index => Slot(index, inPossession[index].Values, outOfPossession[index].Values, names))
+                .ToList(),
+            Bench = (await selection)
+                .Where(place => place.Index >= TacticConstants.FirstBenchIndex)
+                .OrderBy(place => place.Index)
+                .Select(place => place.Player?.Index is { } dbIndex && byDatabaseIndex.TryGetValue(dbIndex, out var player)
+                    ? new BenchPlace { Index = place.Index!.Value, PlayerId = player.Id, PlayerName = player.Name }
+                    : new BenchPlace { Index = place.Index!.Value })
                 .ToList(),
             Squad = (await squad).Items
                 .Where(player => player.Values.Id is not null)
@@ -251,12 +265,60 @@ internal sealed class TacticEditorBridgeClient(
     public async Task PickAsync(int index, int playerId, CancellationToken cancellationToken = default)
     {
         // The plugin names a player by their place in the game's database.
-        var player = (await SquadAsync(cancellationToken)).Items.FirstOrDefault(p => p.Values.Id == playerId)?.Source?.Index
+        var squad = (await SquadAsync(cancellationToken)).Items;
+        var listIndex = squad.FindIndex(p => p.Values.Id == playerId);
+        var player = (listIndex >= 0 ? squad[listIndex].Source?.Index : null)
             ?? throw new GameRejectedException($"No first-team player has id {playerId}.");
 
+        if (index < LineupSize)
+        {
+            await bridge.WriteAsync<JsonElement>(
+                BridgeQuery.Write("/pick", [("index", Format(index)), ("player", Format(player))]),
+                cancellationToken);
+            return;
+        }
+
+        // A bench place: the record the plugin's /pick builds for the eleven, sent through /native on the tactic from
+        // the team, with the player as the squad lists him and where he stands in the matchday squad now.
+        var from = (await SelectionAsync(cancellationToken)).FirstOrDefault(place => place.Player?.Index == player)?.Index
+                   ?? TacticConstants.OutsideMatchdaySquad;
+
+        var data = JsonSerializer.Serialize(new Dictionary<string, object>
+        {
+            ["PropertyValue"] = TacticConstants.PickPlayerOption,
+            ["DisplayValue"] = new Dictionary<string, object>
+            {
+                ["player"] = $"@{TacticConstants.PlayersFromTeam}[{Format(listIndex)}]",
+                ["PlayerTeamSelectionIndex"] = from,
+                ["Index"] = player,
+                ["StarRange"] = new Dictionary<string, object> { ["MaxValue"] = 0, ["MinValue"] = 0, ["IsScoutsOpinion"] = false },
+                ["TeamSelectionIndex"] = index
+            }
+        });
+
         await bridge.WriteAsync<JsonElement>(
-            BridgeQuery.Write("/pick", [("index", Format(index)), ("player", Format(player))]),
+            BridgeQuery.FromHuman()
+                .Base(TacticConstants.TeamPath)
+                .Context(TacticConstants.TacticFlag, true)
+                .ToWrite("/native",
+                    ("event", TacticConstants.PickPlayerEvent),
+                    ("field", $"Target:@{TacticConstants.TacticFromTeam}"),
+                    ("data", data),
+                    ("template", "none")),
             cancellationToken);
+    }
+
+    // The matchday squad's places: the bench's, then the eleven's.
+    private async Task<List<BridgeSelectionPlaceDto>> SelectionAsync(CancellationToken cancellationToken)
+    {
+        var selection = await ValuesAsync<BridgeSelectionDto>(
+            OnTactic()
+                .Context(TacticConstants.InPossession, true)
+                .Context(TacticConstants.TeamSelectionIndex, 0L)
+                .Props([TacticConstants.SelectionDropdown]),
+            cancellationToken);
+
+        return (selection.Rows ?? []).Select(row => row.RowData).OfType<BridgeSelectionPlaceDto>().ToList();
     }
 
     public async Task<WriteOutcome> SetRoleAsync(int index, bool inPossession, string role, CancellationToken cancellationToken = default)

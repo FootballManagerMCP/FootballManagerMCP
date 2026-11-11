@@ -23,7 +23,7 @@ internal static class PlayerMenus
         return entry;
     }
 
-    // "Assign scout > David Pleat (Scout) > 1 week", as the game labels each level.
+    // "Assign scout > [a scout's name] (Scout) > 1 week", as the game labels each level.
     public static string Label(List<MenuEntry> menu, IReadOnlyList<int> path)
     {
         var labels = new List<string>();

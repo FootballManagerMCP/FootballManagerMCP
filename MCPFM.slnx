@@ -11,4 +11,7 @@
   <Folder Name="/src/Plugin/">
     <Project Path="src/Plugin/FootballManager.Plugin/FootballManager.Plugin.csproj" />
   </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/FootballManager.Tests/FootballManager.Tests.csproj" />
+  </Folder>
 </Solution>

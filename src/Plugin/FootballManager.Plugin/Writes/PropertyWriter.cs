@@ -44,7 +44,7 @@ internal static class PropertyWriter
         }
         finally
         {
-            await MainThreadDispatcher.RunAsync(() =>
+            await MainThreadDispatcher.RunTeardownAsync(() =>
             {
                 request.Dispose();
                 return true;

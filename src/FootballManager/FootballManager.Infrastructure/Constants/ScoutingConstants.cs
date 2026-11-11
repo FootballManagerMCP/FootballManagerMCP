@@ -172,12 +172,12 @@ internal static class ScoutingConstants
     public const uint AddToShortlistAction = 1097488485;
     public const uint RemoveFromShortlistAction = 1500280650;
 
-    // "Proposer période d'essai" > 1, 2, 3 or 4 weeks; once offered, the player's menu has the withdrawal instead
+    // "Offer trial" > 1, 2, 3 or 4 weeks; once offered, the player's menu has the withdrawal instead
     // (PersonWithdrawPlayerTransferOffer, the same entry as for a transfer offer).
     public const uint OfferTrialAction = 1749513580;
     public const uint WithdrawOfferAction = 1951493231;
 
-    // "Mettre fin à la période d'essai" (PersonTerminateTrial), a single entry, on a player on trial at the club.
+    // "End trial" (PersonTerminateTrial), a single entry, on a player on trial at the club.
     public const uint EndTrialAction = 1299399024;
 
     public static uint ActionIdOf(PlayerMenuAction action)

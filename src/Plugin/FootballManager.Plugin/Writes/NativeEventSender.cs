@@ -56,7 +56,7 @@ internal static class NativeEventSender
         }
         finally
         {
-            await MainThreadDispatcher.RunAsync(() =>
+            await MainThreadDispatcher.RunTeardownAsync(() =>
             {
                 watch.Dispose();
                 return true;

@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text.Json.Serialization;
 using FootballManager.Infrastructure.Constants;
 
@@ -9,6 +10,10 @@ internal sealed class BridgeFixtureDto
     /// <summary>"yyyy-MM-dd".</summary>
     [JsonPropertyName(MatchConstants.Date)]
     public string? Date { get; set; }
+
+    /// <summary>A fixture whose date isn't set yet (to be arranged) has none to show, nor numbers.</summary>
+    [JsonIgnore]
+    public bool HasDate => DateOnly.TryParseExact(Date, MatchConstants.DateFormat, CultureInfo.InvariantCulture, DateTimeStyles.None, out _);
 
     [JsonPropertyName(MatchConstants.Competition)]
     public string? Competition { get; set; }

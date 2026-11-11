@@ -62,7 +62,18 @@ public class TacticEditingService(ITacticEditorGameClient game) : ITacticEditing
             }
 
             var edit = new TacticEdit { Slot = changes.Slot, Applied = apply };
-            await new EditRun(game, options, roles, edit, apply, cancellationToken).RunAsync(changes, tactic);
+
+            try
+            {
+                await new EditRun(game, options, roles, edit, apply, cancellationToken).RunAsync(changes, tactic);
+            }
+            catch (GameUnavailableException exception) when (edit.Steps.Any(step => step.Status == EditStepStatus.Done))
+            {
+                // Some writes went through before a read between them failed: say which, rather than lose them behind
+                // the error.
+                edit.Notes.Add($"The game stopped answering partway ({exception.Message}). The steps marked Done were " +
+                               "applied, the others weren't: check get_tactics before trying again.");
+            }
 
             return Result.Ok(edit);
         }
@@ -124,7 +135,43 @@ public class TacticEditingService(ITacticEditorGameClient game) : ITacticEditing
         }
 
         ValidateLineup(changes.Lineup, options, tactic, Add);
+        ValidateBench(changes, tactic, Add);
         return errors;
+    }
+
+    private static void ValidateBench(TacticChanges changes, EditableTactic tactic, Action<string, string> add)
+    {
+        if (changes.Bench is not { } bench)
+        {
+            return;
+        }
+
+        if (bench.Count > tactic.Bench.Count)
+        {
+            add("bench", $"The bench has {tactic.Bench.Count} places, not {bench.Count}.");
+        }
+
+        foreach (var duplicate in bench.GroupBy(id => id).Where(group => group.Count() > 1))
+        {
+            add("bench", $"Player {duplicate.Key} is listed {duplicate.Count()} times.");
+        }
+
+        // The eleven once the lineup is placed: all eleven when given, else the current one.
+        var starters = changes.Lineup.Count == LineupSize
+            ? changes.Lineup.Select(change => change.PlayerId).ToHashSet()
+            : tactic.Lineup.Select(slot => slot.PlayerId).OfType<int>().ToHashSet();
+
+        for (var i = 0; i < bench.Count; i++)
+        {
+            if (!tactic.Squad.ContainsKey(bench[i]))
+            {
+                add($"bench[{i}]", $"No first-team player has id {bench[i]} (get_squad lists their ids).");
+            }
+            else if (starters.Contains(bench[i]))
+            {
+                add($"bench[{i}]", $"{Name(tactic, bench[i])} starts: a starter can't be on the bench too.");
+            }
+        }
     }
 
     private static void ValidateLineup(
@@ -395,12 +442,7 @@ public class TacticEditingService(ITacticEditorGameClient game) : ITacticEditing
                 lineupUnseen |= !apply;
             }
 
-            if (changes.Lineup.Count == 0)
-            {
-                return;
-            }
-
-            if (lineupUnseen)
+            if (changes.Lineup.Count > 0 && lineupUnseen)
             {
                 edit.Steps.Add(new TacticEditStep
                 {
@@ -409,10 +451,90 @@ public class TacticEditingService(ITacticEditorGameClient game) : ITacticEditing
                     Status = EditStepStatus.Planned,
                     Detail = "Picks, moves, roles and player instructions are planned once the slot and formation are in place."
                 });
+            }
+            else if (changes.Lineup.Count > 0)
+            {
+                await LineupAsync(changes.Lineup, tactic);
+            }
+
+            // Picks into the eleven can move players between it and the bench: the bench is read again after them.
+            await BenchAsync(changes.Bench, await RefreshAsync(tactic), lineupUnseen, picksPlanned: !apply && changes.Lineup.Count > 0);
+        }
+
+        // Fills the bench's places in order. A pick of a player from elsewhere in the matchday squad swaps him with the
+        // place's player, as in the game; one from outside it puts him there and the place's player leaves the squad.
+        private async Task BenchAsync(List<int>? bench, EditableTactic tactic, bool lineupUnseen, bool picksPlanned)
+        {
+            if (bench is null)
+            {
+                if (tactic.Bench.Count > 0 && tactic.Bench.All(place => place.PlayerId is null))
+                {
+                    edit.Notes.Add($"The bench is empty: the team would play without substitutes. Name up to {tactic.Bench.Count} with bench.");
+                }
+
                 return;
             }
 
-            await LineupAsync(changes.Lineup, tactic);
+            if (lineupUnseen)
+            {
+                edit.Steps.Add(new TacticEditStep
+                {
+                    Action = "Bench",
+                    To = $"{bench.Count} players",
+                    Status = EditStepStatus.Planned,
+                    Detail = "Planned once the lineup is in place."
+                });
+                return;
+            }
+
+            if (picksPlanned)
+            {
+                edit.Notes.Add("The bench is planned from the matchday squad as it stands: picks into the eleven may move " +
+                               "players between it and the bench first.");
+            }
+
+            var picks = new List<(TacticEditStep Step, int Index, string? Expected)>();
+
+            for (var i = 0; i < bench.Count; i++)
+            {
+                var place = tactic.Bench[i];
+                var playerId = bench[i];
+
+                if (place.PlayerId == playerId)
+                {
+                    continue;
+                }
+
+                var incoming = tactic.Squad.GetValueOrDefault(playerId);
+                var step = Step("Bench", $"place {i + 1}", place.PlayerName ?? "empty", incoming);
+
+                await WriteAsync(step, async () =>
+                {
+                    await game.PickAsync(place.Index, playerId, cancellationToken);
+                    return null;
+                });
+
+                picks.Add((step, place.Index, incoming));
+            }
+
+            if (picks.Count == 0)
+            {
+                return;
+            }
+
+            tactic = await RefreshAsync(tactic);
+
+            foreach (var (step, index, expected) in picks.Where(p => apply && p.Step.Status == EditStepStatus.Done))
+            {
+                var held = tactic.Bench.FirstOrDefault(place => place.Index == index)?.PlayerName;
+
+                if (held != expected)
+                {
+                    step.Status = EditStepStatus.Failed;
+                    step.Detail = $"The game holds {held ?? "nobody"} there instead (a trialist can't be picked, say).";
+                    _stopped = true;
+                }
+            }
         }
 
         private async Task LineupAsync(List<LineupChange> lineup, EditableTactic tactic)
@@ -755,7 +877,7 @@ public class TacticEditingService(ITacticEditorGameClient game) : ITacticEditing
         }
 
         // One write at a time: the game drops writes to the same property that arrive together (nine roles sent at once
-        // left eight unchanged, 2026-11-05). Each returns the key the game holds afterwards, or null when it can't say;
+        // left eight unchanged). Each returns the key the game holds afterwards, or null when it can't say;
         // holding anything other than the step's target is a failure, and stops the edit.
         private async Task WriteAllAsync(IReadOnlyCollection<(TacticEditStep Step, Func<Task<string?>> Write)> writes)
         {

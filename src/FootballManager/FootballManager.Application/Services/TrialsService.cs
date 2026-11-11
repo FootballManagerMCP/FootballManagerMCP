@@ -61,7 +61,7 @@ public class TrialsService(IScoutingEditorGameClient editor) : ITrialsService
     {
         return ChangeAsync(playerIds, null, expectedPlayers, apply,
             player => PlanEndAsync(player, cancellationToken),
-            state => state == TrialState.None,
+            state => state is TrialState.None or TrialState.Leaving,
             "released from a trial or an offer", cancellationToken);
     }
 
@@ -214,11 +214,14 @@ public class TrialsService(IScoutingEditorGameClient editor) : ITrialsService
     private async Task<(PlayerMenuAction Action, List<MenuEntry>? Menu, List<int>? Entry, string? Skip, TrialState State)> PlanEndAsync(
         ScoutedPlayer player, CancellationToken cancellationToken)
     {
-        var state = StateOf(await editor.GetOfferedActionsAsync(player.Id, cancellationToken));
+        var state = await StateAsync(player.Id, cancellationToken);
 
-        if (state == TrialState.None)
+        switch (state)
         {
-            return (PlayerMenuAction.EndTrial, null, null, "he's neither on trial at the club nor waiting on an offer", state);
+            case TrialState.None:
+                return (PlayerMenuAction.EndTrial, null, null, "the game offers neither to end a trial nor to withdraw an offer for him (not on trial, or in contract talks)", state);
+            case TrialState.Leaving:
+                return (PlayerMenuAction.EndTrial, null, null, "his trial was already ended: he leaves the club at the next day's processing", state);
         }
 
         var action = state == TrialState.OnTrial ? PlayerMenuAction.EndTrial : PlayerMenuAction.WithdrawOffer;
@@ -226,6 +229,21 @@ public class TrialsService(IScoutingEditorGameClient editor) : ITrialsService
         return await editor.GetMenuAsync(player.Id, action, cancellationToken) is [{ CanRun: true }, ..] menu
             ? (action, menu, [0], null, state)
             : (action, null, null, "the game's menu has no entry to do it", state);
+    }
+
+    // As the menu shows him, telling an ended trial (its end greyed out, until he leaves) from a running one.
+    private async Task<TrialState> StateAsync(int playerId, CancellationToken cancellationToken)
+    {
+        var state = StateOf(await editor.GetOfferedActionsAsync(playerId, cancellationToken));
+
+        if (state != TrialState.OnTrial)
+        {
+            return state;
+        }
+
+        return await editor.GetMenuAsync(playerId, PlayerMenuAction.EndTrial, cancellationToken) is [{ CanRun: false }, ..]
+            ? TrialState.Leaving
+            : TrialState.OnTrial;
     }
 
     // Sends each planned change in turn. The first refusal would likely come again for the rest: the run stops there
@@ -255,10 +273,12 @@ public class TrialsService(IScoutingEditorGameClient editor) : ITrialsService
                     changes.Notes.Add($"The game still shows {player.Name} as {change.Trial} after the change was sent.");
                 }
             }
-            catch (GameRejectedException exception)
+            catch (Exception exception) when (exception is GameRejectedException or GameUnavailableException)
             {
-                changes.Notes.Add($"The game refused it for {player.Name}: {exception.Message} The run stopped there; " +
-                                  $"{changes.Players.Count - i} players weren't {done}.");
+                var why = exception is GameRejectedException ? "refused it" : "stopped answering";
+                changes.Notes.Add($"The game {why} for {player.Name}: {exception.Message} The run stopped there; " +
+                                  $"{changes.Players.Count - i} players weren't {done}" +
+                                  (exception is GameUnavailableException ? $", and whether {player.Name} was isn't known." : "."));
                 changes.Players.RemoveRange(i, changes.Players.Count - i);
                 return;
             }
@@ -277,7 +297,7 @@ public class TrialsService(IScoutingEditorGameClient editor) : ITrialsService
         {
             await Task.Delay(RetryPause, cancellationToken);
 
-            if (reached(StateOf(await editor.GetOfferedActionsAsync(playerId, cancellationToken))))
+            if (reached(await StateAsync(playerId, cancellationToken)))
             {
                 return null;
             }
@@ -293,7 +313,7 @@ public class TrialsService(IScoutingEditorGameClient editor) : ITrialsService
 
         for (var check = 0; check < StateChecks; check++)
         {
-            state = StateOf(await editor.GetOfferedActionsAsync(playerId, cancellationToken));
+            state = await StateAsync(playerId, cancellationToken);
 
             if (reached(state))
             {

@@ -14,7 +14,7 @@ public class InboxMessage
     public string? Sender { get; set; }
     public string Title { get; set; } = string.Empty;
 
-    /// <summary>What it's about, e.g. "Celtic".</summary>
+    /// <summary>What it's about, e.g. the club or the competition.</summary>
     public string? Subtitle { get; set; }
 
     public string? Body { get; set; }

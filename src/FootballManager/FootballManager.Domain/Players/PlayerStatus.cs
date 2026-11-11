@@ -12,6 +12,6 @@ public class PlayerStatus
     /// <summary>As the game names it, e.g. "Transfer agreed".</summary>
     public string? Label { get; set; }
 
-    /// <summary>The game's details, e.g. "Will join Celtic on 5/1/2027" or a listing's asking price.</summary>
+    /// <summary>The game's details, e.g. the club a player will join and when, or a listing's asking price.</summary>
     public string? Detail { get; set; }
 }

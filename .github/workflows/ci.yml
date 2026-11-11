@@ -1,0 +1,30 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  build-and-test:
+    # Everything but the plugin, which builds only against an installed Football Manager 27 with BepInEx. The test
+    # project references the API, its layers and the MCP server, so building it builds them all.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Restore
+        run: dotnet restore tests/FootballManager.Tests
+
+      - name: Build
+        run: dotnet build tests/FootballManager.Tests --no-restore --configuration Release
+
+      - name: Test
+        run: dotnet test tests/FootballManager.Tests --no-build --configuration Release
+
+      - name: Build the API's Docker image
+        run: docker build --file src/FootballManager/FootballManager.Api/Dockerfile src

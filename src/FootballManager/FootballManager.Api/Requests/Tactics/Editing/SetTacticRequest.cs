@@ -16,4 +16,7 @@ public class SetTacticRequest
 
     /// <summary>Players of the starting eleven to place; bringing a player in needs all eleven.</summary>
     public List<LineupChangeRequest>? Lineup { get; set; }
+
+    /// <summary>The substitutes by FM id, in the bench's order; left out, the bench stays as it is.</summary>
+    public List<int>? Bench { get; set; }
 }

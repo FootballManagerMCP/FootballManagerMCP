@@ -19,17 +19,25 @@ internal static class WriteGuard
     {
         EnsureConfirmed(confirmed);
 
-        var live = await MainThreadDispatcher.RunAcrossFramesAsync(
+        var (answered, live) = await MainThreadDispatcher.RunAcrossFramesAsync(
             () => PropertyRequest.Start(
                 GameBindings.ValueOf(GameBindings.FindRoot(DataQueries.HumanRoot)), [LiveMatchPath], []),
             request => request.IsComplete,
             request =>
             {
-                var value = request.PathBindings[0].Value;
+                var binding = request.PathBindings[0];
+                var answer = (binding.Received, binding.Value);
                 request.Dispose();
-                return value;
+                return answer;
             },
             timeout);
+
+        // Fails closed: a write goes ahead only once the game has said no match is being played. Without a next fixture
+        // the game answers null, which is no match.
+        if (!answered)
+        {
+            throw new ArgumentException("The game didn't say whether a match is being played, so nothing was written. Try again.");
+        }
 
         if (live is true)
         {

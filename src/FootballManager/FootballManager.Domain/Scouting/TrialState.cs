@@ -10,5 +10,11 @@ public enum TrialState
     OfferWaiting,
 
     /// <summary>On trial at the club: the menu offers to end it.</summary>
-    OnTrial
+    OnTrial,
+
+    /// <summary>
+    /// His trial was ended: he leaves the club at the game's next processing. Until then the trial still shows, with its
+    /// end greyed out in the menu.
+    /// </summary>
+    Leaving
 }

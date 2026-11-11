@@ -10,16 +10,39 @@ public sealed class MainThreadDispatcher : MonoBehaviour
     private static readonly ConcurrentQueue<Action> Work = new();
     private static readonly TimeSpan PollInterval = TimeSpan.FromMilliseconds(50);
 
+    /// <summary>
+    /// The current request's expiry, which flows into the work it queues: once the request has been answered with a
+    /// timeout, work it queued and that hasn't started is dropped, so a client retrying doesn't get both runs.
+    /// </summary>
+    public static readonly AsyncLocal<CancellationToken> RequestExpiry = new();
+
     public MainThreadDispatcher(IntPtr pointer) : base(pointer)
     {
     }
 
     public static Task<T> RunAsync<T>(Func<T> work)
     {
+        return Enqueue(work, RequestExpiry.Value);
+    }
+
+    /// <summary>For tearing down what earlier work set up: runs even once the request has expired.</summary>
+    public static Task<T> RunTeardownAsync<T>(Func<T> work)
+    {
+        return Enqueue(work, CancellationToken.None);
+    }
+
+    private static Task<T> Enqueue<T>(Func<T> work, CancellationToken expiry)
+    {
         var completion = new TaskCompletionSource<T>(TaskCreationOptions.RunContinuationsAsynchronously);
 
         Work.Enqueue(() =>
         {
+            if (expiry.IsCancellationRequested)
+            {
+                completion.SetCanceled(expiry);
+                return;
+            }
+
             try
             {
                 completion.SetResult(work());
@@ -53,7 +76,7 @@ public sealed class MainThreadDispatcher : MonoBehaviour
             // Still tear down; the polling error is the one worth reporting.
             try
             {
-                await RunAsync(() => finish(state));
+                await RunTeardownAsync(() => finish(state));
             }
             catch (Exception)
             {
@@ -62,7 +85,7 @@ public sealed class MainThreadDispatcher : MonoBehaviour
             throw;
         }
 
-        return await RunAsync(() => finish(state));
+        return await RunTeardownAsync(() => finish(state));
     }
 
     public void Update()

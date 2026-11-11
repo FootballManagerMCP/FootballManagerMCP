@@ -1,6 +1,7 @@
 using System.Text.Json.Serialization;
 using Asp.Versioning;
 using FootballManager.Api.ExceptionHandler;
+using FootballManager.Api.Extensions;
 using FootballManager.Api.Mappings;
 using FootballManager.Application;
 using FootballManager.Infrastructure;
@@ -21,7 +22,7 @@ builder.Host.UseSerilog((context, loggerConfig) =>
     loggerConfig
         .ReadFrom.Configuration(context.Configuration)
         .Enrich.WithProperty("Application", "FootballManager.Api")
-        .WriteTo.Console()
+        // The console comes from configuration (Serilog:WriteTo).
         .WriteTo.Seq(context.Configuration["Seq:ServerUrl"] ?? "http://localhost:5341");
 });
 
@@ -44,7 +45,9 @@ builder.Services.ConfigureHttpJsonOptions(options =>
 });
 
 builder.Services.AddEndpointsApiExplorer();
-builder.Services.AddSwaggerGen();
+// The controllers' and models' XML docs, in the Swagger page.
+builder.Services.AddSwaggerGen(options =>
+    options.IncludeXmlComments(Path.Combine(AppContext.BaseDirectory, $"{typeof(Program).Assembly.GetName().Name}.xml")));
 
 // Add health checks
 builder.Services.AddHealthChecks();
@@ -88,6 +91,9 @@ if (app.Environment.IsDevelopment())
 app.UseSerilogRequestLogging();
 
 app.UseExceptionHandler();
+
+// Reading another team switches the game's current team for a moment: requests to the game go one at a time.
+app.UseMiddleware<OneGameRequestAtATime>();
 
 app.MapControllers();
 

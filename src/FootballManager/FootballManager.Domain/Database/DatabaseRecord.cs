@@ -43,8 +43,8 @@ public class DatabaseRecord
     public string? ClubNation { get; set; }
 
     /// <summary>
-    /// A club's league, or a person's club's. A person's is the league's short name ("1ère Division"), which only the
-    /// club's nation tells apart.
+    /// A club's league, or a person's club's. A person's is the league's short name, as the game shortens it, which
+    /// only the club's nation tells apart.
     /// </summary>
     public string? League { get; set; }
 
