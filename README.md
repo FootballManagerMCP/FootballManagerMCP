@@ -99,13 +99,16 @@ review and a match plan with these tools (see [step 8](#8-optional-install-the-t
 - **Your saves are left alone.** No tool saves the game, continues to the next day, or opens or closes a save. The
   plugin has endpoints that can: `/continue` presses the Continue button, and `/load` and `/quit` open and quit one
   save of your choice, a copy for an AI to experiment on alone (see [Configuration](#configuration)). None of them is
-  exposed as a tool, and each needs `confirm=true`.
+  exposed as a tool, and each needs `confirm=true`. `/load` also needs `supervised=true`: only run it with someone
+  watching the game. On 27.0.1 it has opened the most recent save instead of the copy; `/session` then warns, and
+  whoever watches quits or plays that save.
 - **Hidden data only on request.** Hidden attributes and current/potential ability are only read when asked for
   (`includeHidden`), and the game masks them unless you have the In-Game Editor.
 
 ## Requirements
 
-- **Windows 10 or 11**, with **Football Manager 27 on Steam**. Tested on game version 27.0.0.2493426.
+- **Windows 10 or 11**, with **Football Manager 27 on Steam**. Built and tested on game version 27.0.0.2493426; on
+  27.0.1.2494769 the plugin loads and the tools read the game, while changes haven't been tried yet.
 - **[BepInEx 6](https://builds.bepinex.dev/projects/bepinex_be), IL2CPP build.** Tested with 6.0.0-be.791; the setup
   below links that build.
 - **[.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0).** It builds the plugin and runs the API and the
@@ -346,8 +349,8 @@ Change the plugin's port in `mcpfm.bridge.cfg` and `InfrastructureSettings__Game
 
 ## Known limits
 
-- **Windows and Steam only**, tested on one game version (27.0.0.2493426) with the game in French. The tools use the
-  game's ids rather than its text, so other languages should work, but they haven't been tested.
+- **Windows and Steam only**, tested on 27.0.0.2493426 (reads also on 27.0.1.2494769) with the game in French. The
+  tools use the game's ids rather than its text, so other languages should work, but they haven't been tested.
 - **Game updates can break it** (see [Updating](#updating)).
 - **Some data is the game's, as it keeps it.** Teams far from your competitions have few match numbers. A substitute's
   position is the one of the slot he took: a reshuffle after a change isn't recorded.
@@ -378,8 +381,8 @@ skills/                              Claude skills that use the tools
 - **Which paths make up a feature lives in the API**, in the Infrastructure clients and their constants. Mappings use
   Mapster.
 - **Swagger:** the API in Development mode (as `dotnet run` starts it) serves it at <http://localhost:5120/swagger>.
-- **Build everything:** `dotnet build MCPFM.slnx`. The plugin needs the game with BepInEx and says so if they're missing;
-  its copy to the game folder warns if the game is running (`-p:SkipDeploy=true` only builds it).
+- **Build everything:** `dotnet build MCPFM.slnx`. The plugin needs the game with BepInEx and says so if they're
+  missing; its copy to the game folder warns if the game is running (`-p:SkipDeploy=true` only builds it).
 - **Tests:** `dotnet test tests/FootballManager.Tests` covers the mappings, the football logic (lineup pairing,
   substitutions, positions, team lookup) and the services against fake game clients: count guards, skips, partial
   runs, bench checks, and that writes reach the plugin as it requires. Nothing needs the game. CI

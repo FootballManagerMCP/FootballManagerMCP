@@ -37,14 +37,28 @@ internal static class SaveSession
 
     private static DateTime? _loadSentUtc;
 
+    // Whether this plugin asked the game for the investigation save since the last quit: then any other save loaded
+    // came from that request.
+    private static bool _loadRequested;
+
+    private const string SupervisedOnly =
+        "Loading a save needs someone at the game: repeat with supervised=true once they're watching. On FM 27.0.1 the "
+        + "game has opened the most recent save instead of the investigation copy, which would put whatever runs next on "
+        + "the user's own career; whoever watches can quit or play it if that happens.";
+
     public static async Task<string> DescribeAsync(string investigationSave, TimeSpan timeout)
     {
         var state = await StateAsync(timeout);
         return Json.Serialize(Describe(state, investigationSave));
     }
 
-    public static async Task<string> LoadAsync(string investigationSave, bool send, TimeSpan timeout)
+    public static async Task<string> LoadAsync(string investigationSave, bool send, bool supervised, TimeSpan timeout)
     {
+        if (send && !supervised)
+        {
+            throw new ArgumentException(SupervisedOnly);
+        }
+
         var file = SaveFile(investigationSave);
 
         if (!File.Exists(file))
@@ -82,6 +96,7 @@ internal static class SaveSession
             {
                 Subsystems.Get<EventSubsystem>().SendEvent(new LoadSelectedGameEvent { LoadGameDataRecord = record });
                 _loadSentUtc = DateTime.UtcNow;
+                _loadRequested = true;
             }
 
             return description;
@@ -94,7 +109,10 @@ internal static class SaveSession
             ["dryRun"] = !send,
             ["sent"] = sent,
             ["preferencesKept"] = kept,
-            ["next"] = send ? "The game takes about ten seconds; watch /session until loaded is true." : null
+            ["next"] = send
+                ? "The game takes about ten seconds; watch /session until loaded is true, then check isInvestigationSave: "
+                  + "false means the game opened another save, the user's own, so write nothing and leave it to whoever watches."
+                : null
         });
     }
 
@@ -110,6 +128,11 @@ internal static class SaveSession
         }
 
         var restored = send ? LastSavedPreferences.Restore() : [];
+
+        if (send)
+        {
+            _loadRequested = false;
+        }
 
         if (send)
         {
@@ -142,7 +165,11 @@ internal static class SaveSession
             ["loading"] = !state.GameLoaded && DateTime.UtcNow - _loadSentUtc < LoadInProgress,
             ["investigationSave"] = investigationSave,
             ["investigationSaveFile"] = File.Exists(file) ? file : null,
-            ["preferencesKept"] = LastSavedPreferences.AreKept
+            ["preferencesKept"] = LastSavedPreferences.AreKept,
+            ["warning"] = state.GameLoaded && _loadRequested && !IsInvestigationSave(state.LastSaveName, investigationSave)
+                ? $"The game opened {state.LastSaveName ?? "another save"}, not the investigation copy /load asked for. It's the "
+                  + "user's own save: write nothing, and leave quitting or playing it to whoever watches."
+                : null
         };
     }
 

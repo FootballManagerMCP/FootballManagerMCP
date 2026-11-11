@@ -97,7 +97,8 @@ internal sealed class BridgeServer(int port, string investigationSave, ManualLog
                     + "/move?index=<0-10>&to=<position mask>|with=<0-10>&inPossession=true|false, "
                     + "/pick?index=<0-10>&player=<database index> (dryRun=true to only build either). "
                     + "Investigation save: /session; /load and /quit (confirm=true, or dryRun=true) open it from the start screen and "
-                    + "quit the game with it or the start screen loaded, never any other save. "
+                    + "quit the game with it or the start screen loaded, never any other save. /load also needs supervised=true, "
+                    + "someone watching the game: on FM 27.0.1 it has opened the most recent save instead (/session then warns). "
                     + "Writes (/set, /event, /native, /move, /pick, /load, /quit, /continue) are POST requests with the header "
                     + "X-MCPFM-Write: true, except dry runs (dryRun=true). "
                     + "Continue: /continue (confirm=true, or dryRun=true) presses the Continue button as a click does; its state is "
@@ -177,7 +178,7 @@ internal sealed class BridgeServer(int port, string investigationSave, ManualLog
     private Func<Task<Reply>>? Route(string path, NameValueCollection query) => path switch
     {
         "/session" => Json(() => SaveSession.DescribeAsync(investigationSave, AnswerTimeout(query))),
-        "/load" => Json(() => SaveSession.LoadAsync(investigationSave, SessionSend(query), AnswerTimeout(query))),
+        "/load" => Json(() => SaveSession.LoadAsync(investigationSave, SessionSend(query), query["supervised"] == "true", AnswerTimeout(query))),
         "/quit" => Json(() => SaveSession.QuitAsync(investigationSave, SessionSend(query), AnswerTimeout(query))),
         "/continue" => Json(() => ContinueButton.PressAsync(query["confirm"] == "true", query["dryRun"] == "true", AnswerTimeout(query))),
         "/status" => Text(GameStatus.Describe),
