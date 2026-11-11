@@ -31,6 +31,16 @@ public interface IScoutingEditorGameClient
     Task<ScoutedPlayer?> FindPlayerAsync(int playerId, CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// The players of these ids that the player search's listed results, the scouting lists, the club's own squad
+    /// (trialists included) or the game's search box hold, by id; an id none holds is left out. Unlike <see cref="FindPlayerAsync"/>, it doesn't read the whole
+    /// player search: only the places its listed results were seen at.
+    /// </summary>
+    Task<Dictionary<int, ScoutedPlayer>> FindPlayersAsync(IReadOnlyCollection<int> playerIds, CancellationToken cancellationToken = default);
+
+    /// <summary>The menu actions of <see cref="PlayerMenuAction"/> the game offers for the player now.</summary>
+    Task<HashSet<PlayerMenuAction>> GetOfferedActionsAsync(int playerId, CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// A team's squad, by the team's FM id (a team of the user's competitions, or a club the game's search has listed),
     /// with each player made reachable for <see cref="GetMenuAsync"/>; null for a team neither has listed.
     /// </summary>

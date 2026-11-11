@@ -50,6 +50,13 @@ internal sealed class BridgePlayerDto
     [JsonConverter(typeof(CappedListJsonConverter<BridgePlayerStatusDto>))]
     public List<BridgePlayerStatusDto>? TeamStatuses { get; set; }
 
+    [JsonPropertyName(GameConstants.TrialIsValid)]
+    public bool? TrialIsValid { get; set; }
+
+    // yyyy-MM-dd, as the plugin writes the game's dates.
+    [JsonPropertyName(GameConstants.TrialEndDate)]
+    public string? TrialEndDate { get; set; }
+
     [JsonPropertyName(GameConstants.CurrentAbility)]
     public int? CurrentAbility { get; set; }
 

@@ -40,7 +40,7 @@ internal sealed class SquadBridgeClient(GameBridge bridge, GameVocabulary vocabu
     private static List<string> PlayerPaths(
         IReadOnlyCollection<AttributeDefinition> attributes, bool includeAbility, bool includeStats)
     {
-        var paths = new List<string>(GameConstants.PlayerBasics);
+        var paths = new List<string>(GameConstants.PlayerBasics) { GameConstants.TrialIsValid, GameConstants.TrialEndDate };
 
         foreach (var attribute in attributes)
         {

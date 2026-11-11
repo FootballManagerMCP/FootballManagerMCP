@@ -6,6 +6,7 @@ using FootballManager.Api.Responses.Messages;
 using FootballManager.Api.Responses.Players;
 using FootballManager.Api.Responses.Scouting;
 using FootballManager.Api.Responses.Teams;
+using FootballManager.Api.Responses.Trials;
 using FootballManager.Api.Responses.Tactics.Effectiveness;
 using FootballManager.Domain.Database;
 using FootballManager.Domain.Matches;
@@ -150,6 +151,33 @@ public class MappingConfig
             .Map(dest => dest.Name, src => src.PlayerName);
 
         config.NewConfig<SkippedPlayer, SkippedPlayerResponse>()
+            .Map(dest => dest.Name, src => src.PlayerName);
+
+        // As for a team's scouting: the entry and confirmation are given once, a player's own only when they differ.
+        config.NewConfig<TrialChanges, TrialChangesResponse>()
+            .Map(dest => dest.Count, src => src.Players.Count)
+            .Map(dest => dest.Choice, src => src.Players.Count > 0 ? src.Players[0].Choice : null)
+            .Map(dest => dest.Confirmation, src => src.Players.Count > 0 ? src.Players[0].Confirmation : null)
+            .Map(dest => dest.Skipped, src => src.Skipped.Count > 0 ? src.Skipped : null)
+            .Map(dest => dest.NotFound, src => src.NotFound.Count > 0 ? src.NotFound : null)
+            .Map(dest => dest.Notes, src => src.Notes.Count > 0 ? src.Notes : null)
+            .AfterMapping((src, dest) =>
+            {
+                for (var i = 0; i < dest.Players.Count && i < src.Players.Count; i++)
+                {
+                    if (SameConfirmation(src.Players[i], src.Players[0]))
+                    {
+                        dest.Players[i].Confirmation = null;
+                    }
+
+                    if (src.Players[i].Choice == src.Players[0].Choice)
+                    {
+                        dest.Players[i].Choice = null;
+                    }
+                }
+            });
+
+        config.NewConfig<PlayerScoutingChange, TrialPlayerResponse>()
             .Map(dest => dest.Name, src => src.PlayerName);
     }
 

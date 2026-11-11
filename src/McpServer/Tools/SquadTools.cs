@@ -13,7 +13,8 @@ public static class SquadTools
                  "game shows for them (its status icons), each with the game's English key, label and details: " +
                  "injuries and fitness tests, TransferListed, PlayerWaitingOnPromiseForHappiness (with the promise), " +
                  "Wanted (the clubs watching them), AvailableForReserveTeam, reactions to press conferences and team " +
-                 "talks, needing a rest, language courses, and so on. Optionally each " +
+                 "talks, needing a rest, language courses, and so on. Players on trial at the club are in the squad " +
+                 "too, with trialUntil, the day their trial ends (end_trials lets them go). Optionally each " +
                  "player's visible attributes (1-20), grouped as technical, mental, physical and goalkeeping; a range " +
                  "like '11-14' means scouting is incomplete. Text values (positions, roles, morale, personality) are in " +
                  "the game's display language. Fails with a 503 when the game isn't running or no save is loaded.")]

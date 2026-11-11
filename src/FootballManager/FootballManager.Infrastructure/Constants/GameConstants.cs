@@ -31,6 +31,10 @@ internal static class GameConstants
     // hold a few the other lacks (scouted or analysed by the user's club). The recruitment screens' set is a subset.
     public const string Statuses = "PlayerStatus";
     public const string TeamStatuses = "PlayerStatusFlagsForTeam";
+
+    // A trial at the club: every player has a trial contract record, valid only while he's on trial.
+    public const string TrialIsValid = "TrialContract.IsValid";
+    public const string TrialEndDate = "TrialContract.EndDate";
     public const string StatusFlagsEnum = "FM.UI.PlayerStatusFlag";
 
     public static readonly string[] PlayerBasics =

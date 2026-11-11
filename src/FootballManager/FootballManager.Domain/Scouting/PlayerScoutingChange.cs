@@ -25,4 +25,7 @@ public class PlayerScoutingChange
     /// <summary>As the game reads back after the change; for a dry run, as it is now.</summary>
     public bool? IsShortlisted { get; set; }
     public bool? IsBeingScouted { get; set; }
+
+    /// <summary>For a trial offered or ended: where he stands with it after the change; for a dry run, now.</summary>
+    public TrialState? Trial { get; set; }
 }

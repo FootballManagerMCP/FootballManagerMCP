@@ -49,6 +49,7 @@ public class MappingConfig
             .Map(dest => dest.AverageRating, src => src.AverageRating > 0 ? (double?)Math.Round(src.AverageRating.Value, 2) : null)
             // Status keys need the game's names for the flags, passed as StatusKeysParameter.
             .Map(dest => dest.Statuses, src => AllStatuses(src.Statuses, src.TeamStatuses))
+            .Map(dest => dest.TrialUntil, src => src.TrialIsValid == true ? src.TrialEndDate : null)
             .Map(dest => dest.Attributes, src => AttributeBoundsMapper.ToAttributes(src.AttributeBounds))
             // Appearances always comes back when the season's numbers were asked for.
             .Map(dest => dest.SeasonStats, src => src.Appearances == null ? null : src);

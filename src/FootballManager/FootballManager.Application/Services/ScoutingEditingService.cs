@@ -55,8 +55,6 @@ public class ScoutingEditingService(IScoutingEditorGameClient editor, IScoutingG
     public const int MaxStars = 20;
     public const int MaxNameLength = 120;
     private const int SuggestionsShown = 10;
-    private const string Separator = " > ";
-    private const int MenusAtOnce = 4;
 
     public async Task<Result<FocusCreation>> CreateFocusAsync(FocusBrief brief, bool apply, CancellationToken cancellationToken = default)
     {
@@ -161,10 +159,11 @@ public class ScoutingEditingService(IScoutingEditorGameClient editor, IScoutingG
             var change = new TeamScoutingChange { Applied = apply, TeamId = team.TeamId, TeamName = team.TeamName };
             var planned = new List<(ScoutedPlayer Player, List<int> Entry)>();
 
-            change.Skipped.AddRange(team.Players.Where(player => player.IsBeingScouted).Select(player => Skip(player, "already being scouted")));
+            change.Skipped.AddRange(team.Players.Where(player => player.IsBeingScouted).Select(player => PlayerMenus.Skip(player, "already being scouted")));
 
             var candidates = team.Players.Where(player => !player.IsBeingScouted).ToList();
-            var menus = await MenusAsync(candidates, cancellationToken);
+            var menus = await PlayerMenus.AFewAtATimeAsync(
+                candidates, PlayerMenus.MenusAtOnce, player => editor.GetMenuAsync(player.Id, PlayerMenuAction.AssignScout, cancellationToken), cancellationToken);
 
             for (var i = 0; i < candidates.Count; i++)
             {
@@ -173,7 +172,7 @@ public class ScoutingEditingService(IScoutingEditorGameClient editor, IScoutingG
 
                 if (menu is null)
                 {
-                    change.Skipped.Add(Skip(player, "the game doesn't offer to scout him"));
+                    change.Skipped.Add(PlayerMenus.Skip(player, "the game doesn't offer to scout him"));
                     continue;
                 }
 
@@ -187,16 +186,16 @@ public class ScoutingEditingService(IScoutingEditorGameClient editor, IScoutingG
                         return entry.ToResult<TeamScoutingChange>();
                     }
 
-                    change.Skipped.Add(Skip(player,
+                    change.Skipped.Add(PlayerMenus.Skip(player,
                         string.Join(" ", entry.Errors.OfType<ValidationError>().SelectMany(error => error.ErrorMessages))));
                     continue;
                 }
 
-                var picked = ConfirmationOf(menu, entry.Value);
+                var picked = PlayerMenus.ConfirmationOf(menu, entry.Value);
 
                 if (picked.IsWarning)
                 {
-                    change.Skipped.Add(Skip(player, $"the game warns against it: {picked.Text}"));
+                    change.Skipped.Add(PlayerMenus.Skip(player, $"the game warns against it: {picked.Text}"));
                     continue;
                 }
 
@@ -207,7 +206,7 @@ public class ScoutingEditingService(IScoutingEditorGameClient editor, IScoutingG
                     PlayerId = player.Id,
                     PlayerName = player.Name,
                     Action = PlayerMenuAction.AssignScout,
-                    Choice = Label(menu, entry.Value),
+                    Choice = PlayerMenus.Label(menu, entry.Value),
                     Confirmation = picked.Text,
                     IsShortlisted = player.IsShortlisted,
                     IsBeingScouted = player.IsBeingScouted
@@ -261,32 +260,6 @@ public class ScoutingEditingService(IScoutingEditorGameClient editor, IScoutingG
                 return;
             }
         }
-    }
-
-    // Each player's scouting menu, a few at a time: one after another, a squad's take twenty seconds. Only the plan reads
-    // them; sending reads each player's menu again, one at a time.
-    private async Task<List<MenuEntry>?[]> MenusAsync(List<ScoutedPlayer> players, CancellationToken cancellationToken)
-    {
-        using var gate = new SemaphoreSlim(MenusAtOnce);
-
-        return await Task.WhenAll(players.Select(async player =>
-        {
-            await gate.WaitAsync(cancellationToken);
-
-            try
-            {
-                return await editor.GetMenuAsync(player.Id, PlayerMenuAction.AssignScout, cancellationToken);
-            }
-            finally
-            {
-                gate.Release();
-            }
-        }));
-    }
-
-    private static SkippedPlayer Skip(ScoutedPlayer player, string reason)
-    {
-        return new SkippedPlayer { PlayerId = player.Id, PlayerName = player.Name, Reason = reason };
     }
 
     // The entry sending a scout: any scout, or the one named, for the duration asked. The menu's first entries are any
@@ -368,7 +341,7 @@ public class ScoutingEditingService(IScoutingEditorGameClient editor, IScoutingG
                 return entry.ToResult<PlayerScoutingChange>();
             }
 
-            var picked = ConfirmationOf(menu, entry.Value);
+            var picked = PlayerMenus.ConfirmationOf(menu, entry.Value);
 
             var change = new PlayerScoutingChange
             {
@@ -376,7 +349,7 @@ public class ScoutingEditingService(IScoutingEditorGameClient editor, IScoutingG
                 PlayerId = playerId,
                 PlayerName = player.Name,
                 Action = action,
-                Choice = Label(menu, entry.Value),
+                Choice = PlayerMenus.Label(menu, entry.Value),
                 Confirmation = picked.Text,
                 ConfirmationIsWarning = picked.IsWarning,
                 Budget = action == PlayerMenuAction.AssignScout ? await scouting.GetBudgetAsync(cancellationToken) : null,
@@ -413,7 +386,7 @@ public class ScoutingEditingService(IScoutingEditorGameClient editor, IScoutingG
     // can stop after its first `shortest` entries: a player without a club has no matches to be watched for.
     private static Result<List<int>> Duration(List<MenuEntry> menu, List<int> path, int index, int expected, int? shortest = null)
     {
-        var durations = Entry(menu, path).Children;
+        var durations = PlayerMenus.Entry(menu, path).Children;
         var labels = string.Join(", ", durations.Select(d => d.Label));
 
         if (durations.Count != expected && durations.Count != shortest)
@@ -433,53 +406,6 @@ public class ScoutingEditingService(IScoutingEditorGameClient editor, IScoutingG
         }
 
         return Result.Ok<List<int>>([.. path, index]);
-    }
-
-    // The game's confirmation for the entry at path. An entry under a named person sits deeper than the plugin expands
-    // its payload; the confirmation (the costs, the scouting network) is the player's rather than the scout's, so it's
-    // the one of the same duration under another entry, such as any scout.
-    private static (string? Text, bool IsWarning) ConfirmationOf(List<MenuEntry> menu, List<int> path)
-    {
-        var entry = Entry(menu, path);
-
-        if (entry.Confirmation is not null || path.Count < 3)
-        {
-            return (entry.Confirmation, entry.ConfirmationIsWarning);
-        }
-
-        var same = menu
-            .Where(top => top.Children.Count > path[^1])
-            .Select(top => top.Children[path[^1]])
-            .FirstOrDefault(child => child.Confirmation is not null);
-
-        return same is null ? (null, false) : (same.Confirmation, same.ConfirmationIsWarning);
-    }
-
-    private static MenuEntry Entry(List<MenuEntry> menu, IReadOnlyList<int> path)
-    {
-        var entry = menu[path[0]];
-
-        foreach (var index in path.Skip(1))
-        {
-            entry = entry.Children[index];
-        }
-
-        return entry;
-    }
-
-    // "Assign scout > David Pleat (Scout) > 1 week", as the game labels each level.
-    private static string Label(List<MenuEntry> menu, IReadOnlyList<int> path)
-    {
-        var labels = new List<string>();
-        var entries = menu;
-
-        foreach (var index in path)
-        {
-            labels.Add(entries[index].Label);
-            entries = entries[index].Children;
-        }
-
-        return string.Join(Separator, labels);
     }
 
     private static string NotOffered(PlayerMenuAction action, ScoutedPlayer player)

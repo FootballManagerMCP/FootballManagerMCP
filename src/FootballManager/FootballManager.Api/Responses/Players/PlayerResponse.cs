@@ -17,6 +17,9 @@ public class PlayerResponse
     /// <summary>The statuses the game shows for them; null when there are none.</summary>
     public List<PlayerStatusResponse>? Statuses { get; set; }
 
+    /// <summary>Only for a player on trial at the club: the day his trial ends.</summary>
+    public string? TrialUntil { get; set; }
+
     /// <summary>Category ("technical", "mental", ...) to attribute name to value: "12", "11-14" or null if masked.</summary>
     public Dictionary<string, Dictionary<string, string?>>? Attributes { get; set; }
 

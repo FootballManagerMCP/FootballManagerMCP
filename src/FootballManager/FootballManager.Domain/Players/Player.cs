@@ -30,6 +30,9 @@ public class Player
     /// <summary>The statuses the game shows for them: injured, transfer listed, needs a rest, a promise due, ...</summary>
     public List<PlayerStatus> Statuses { get; set; } = [];
 
+    /// <summary>For a player on trial at the club: the day his trial ends (yyyy-MM-dd). Null for the club's own players.</summary>
+    public string? TrialUntil { get; set; }
+
     public List<PlayerAttribute> Attributes { get; set; } = [];
 
     /// <summary>Only filled when asked for.</summary>

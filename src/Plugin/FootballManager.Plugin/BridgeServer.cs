@@ -77,6 +77,8 @@ internal sealed class BridgeServer(int port, string investigationSave, ManualLog
                     + "/pick?index=<0-10>&player=<database index> (dryRun=true to only build either). "
                     + "Investigation save: /session; /load and /quit (confirm=true, or dryRun=true) open it from the start screen and "
                     + "quit the game with it or the start screen loaded, never any other save. "
+                    + "Continue: /continue (confirm=true, or dryRun=true) presses the Continue button as a click does; its state is "
+                    + "/get?root=continue&props=State. "
                     + "Recording: /events?start=true[&interop=false][&writes=false][&ui=false][&data=true]|stop=true|clear=true, "
                     + "read with /events[?stream=data].");
             }
@@ -112,6 +114,7 @@ internal sealed class BridgeServer(int port, string investigationSave, ManualLog
         "/session" => Json(() => SaveSession.DescribeAsync(investigationSave, AnswerTimeout(query))),
         "/load" => Json(() => SaveSession.LoadAsync(investigationSave, SessionSend(query), AnswerTimeout(query))),
         "/quit" => Json(() => SaveSession.QuitAsync(investigationSave, SessionSend(query), AnswerTimeout(query))),
+        "/continue" => Json(() => ContinueButton.PressAsync(query["confirm"] == "true", query["dryRun"] == "true", AnswerTimeout(query))),
         "/status" => Text(GameStatus.Describe),
         "/ui" => Text(() => UiTreeDumper.Dump(query["visibleOnly"] != "false", ParseInt(query["maxDepth"], 500))),
         "/find" => Text(() => UiTreeDumper.Find(query["text"] ?? "")),

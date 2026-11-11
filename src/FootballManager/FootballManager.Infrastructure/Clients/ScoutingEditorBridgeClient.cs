@@ -136,6 +136,62 @@ internal sealed class ScoutingEditorBridgeClient(
 
     public async Task<ScoutedPlayer?> FindPlayerAsync(int playerId, CancellationToken cancellationToken = default)
     {
+        var lists = await ScoutingListsAsync(cancellationToken);
+
+        // The player search last, and on its own: it can hold a thousand players or more, read in half a minute.
+        return (await FindInAsync([playerId], lists, cancellationToken)).GetValueOrDefault(playerId)
+               ?? await FindInSearchAsync(playerId, cancellationToken)
+               ?? await FindInDatabaseSearchAsync(playerId, cancellationToken)
+               ?? (await FindInAsync([playerId], [(ScoutingConstants.PersonSearch, ScoutingConstants.PlayerSearch)], cancellationToken))
+               .GetValueOrDefault(playerId);
+    }
+
+    public async Task<Dictionary<int, ScoutedPlayer>> FindPlayersAsync(IReadOnlyCollection<int> playerIds, CancellationToken cancellationToken = default)
+    {
+        var found = new Dictionary<int, ScoutedPlayer>();
+
+        // Where the player search listed them first, one read each: a batch mostly comes from a search, and the
+        // scouting lists are read whole.
+        foreach (var id in playerIds)
+        {
+            if (await FindInSearchAsync(id, cancellationToken) is { } player)
+            {
+                found[id] = player;
+            }
+        }
+
+        // The club's own squad too: players on trial are in it.
+        if (Missing(playerIds, found) is { Count: > 0 } rest)
+        {
+            List<(string Path, int? SearchType)> lists =
+                [.. await ScoutingListsAsync(cancellationToken), ($"{TeamConstants.OwnTeam}.{TeamConstants.Players}", null)];
+
+            foreach (var (id, player) in await FindInAsync(rest, lists, cancellationToken))
+            {
+                found[id] = player;
+            }
+        }
+
+        foreach (var id in Missing(playerIds, found))
+        {
+            if (await FindInDatabaseSearchAsync(id, cancellationToken) is { } player)
+            {
+                found[id] = player;
+            }
+        }
+
+        // Not the whole player search, as FindPlayerAsync does for one: thousands of results take minutes to read.
+        return found;
+    }
+
+    private static List<int> Missing(IReadOnlyCollection<int> playerIds, Dictionary<int, ScoutedPlayer> found)
+    {
+        return playerIds.Where(id => !found.ContainsKey(id)).ToList();
+    }
+
+    // The scouting centre's recommendations, the shortlist, and each focus's players.
+    private async Task<List<(string Path, int? SearchType)>> ScoutingListsAsync(CancellationToken cancellationToken)
+    {
         var lists = new List<(string Path, int? SearchType)>
         {
             (ScoutingConstants.Recommendations, null),
@@ -151,11 +207,7 @@ internal sealed class ScoutingEditorBridgeClient(
             }
         }
 
-        // The player search last, and on its own: it can hold a thousand players or more, read in half a minute.
-        return await FindInAsync(playerId, lists, cancellationToken)
-               ?? await FindInSearchAsync(playerId, cancellationToken)
-               ?? await FindInDatabaseSearchAsync(playerId, cancellationToken)
-               ?? await FindInAsync(playerId, [(ScoutingConstants.PersonSearch, ScoutingConstants.PlayerSearch)], cancellationToken);
+        return lists;
     }
 
     // The player where the game's search box last listed him, searched for again if the box has moved on.
@@ -214,8 +266,9 @@ internal sealed class ScoutingEditorBridgeClient(
         return player.Values.Adapt<ScoutedPlayer>();
     }
 
-    private async Task<ScoutedPlayer?> FindInAsync(
-        int playerId, List<(string Path, int? SearchType)> lists, CancellationToken cancellationToken)
+    // The players of these ids that the lists hold, each in the first list holding him.
+    private async Task<Dictionary<int, ScoutedPlayer>> FindInAsync(
+        IReadOnlyCollection<int> playerIds, List<(string Path, int? SearchType)> lists, CancellationToken cancellationToken)
     {
         var reads = lists.Select(list => bridge.GetListAsync<BridgeScoutedPlayerDto>(
             ScoutingBridgeClient.InSearch(BridgeQuery.FromHuman(), list.SearchType)
@@ -227,17 +280,36 @@ internal sealed class ScoutingEditorBridgeClient(
 
         await Task.WhenAll(reads);
 
+        var wanted = playerIds.ToHashSet();
+        var found = new Dictionary<int, ScoutedPlayer>();
+
         for (var i = 0; i < lists.Count; i++)
         {
-            if ((await reads[i]).Items.FirstOrDefault(player => player.Values.Id == playerId) is { } found)
+            foreach (var player in (await reads[i]).Items)
             {
-                _players[playerId] = (GameConstants.HumanRoot, $"{lists[i].Path}[{GameConstants.UniqueId}={Format(playerId)}]", lists[i].SearchType);
-                return found.Values.Adapt<ScoutedPlayer>();
+                if (player.Values.Id is { } id && wanted.Contains(id) && !found.ContainsKey(id))
+                {
+                    _players[id] = (GameConstants.HumanRoot, $"{lists[i].Path}[{GameConstants.UniqueId}={Format(id)}]", lists[i].SearchType);
+                    found[id] = player.Values.Adapt<ScoutedPlayer>();
+                }
             }
         }
 
-        _players.Remove(playerId);
-        return null;
+        foreach (var id in wanted.Where(id => !found.ContainsKey(id)))
+        {
+            _players.Remove(id);
+        }
+
+        return found;
+    }
+
+    public async Task<HashSet<PlayerMenuAction>> GetOfferedActionsAsync(int playerId, CancellationToken cancellationToken = default)
+    {
+        var offered = await OfferedAsync(await LocateAsync(playerId, cancellationToken), cancellationToken);
+
+        return Enum.GetValues<PlayerMenuAction>()
+            .Where(action => offered.Contains(ActionKey(ScoutingConstants.ActionIdOf(action))))
+            .ToHashSet();
     }
 
     public async Task<List<MenuEntry>?> GetMenuAsync(int playerId, PlayerMenuAction action, CancellationToken cancellationToken = default)
@@ -245,6 +317,18 @@ internal sealed class ScoutingEditorBridgeClient(
         var player = await LocateAsync(playerId, cancellationToken);
         var actionId = ScoutingConstants.ActionIdOf(action);
 
+        if (!(await OfferedAsync(player, cancellationToken)).Contains(ActionKey(actionId)))
+        {
+            return null;
+        }
+
+        var menu = await bridge.GetRecordAsync<BridgeMenuDto>(OnAction(player, actionId).Props([ScoutingConstants.MenuItems]), cancellationToken);
+        return menu.Values.Items.Adapt<List<MenuEntry>>();
+    }
+
+    // The menu actions the game offers for the player now, keyed as the game lists them ("#<action id>").
+    private async Task<HashSet<string>> OfferedAsync((string Root, string Path, int? SearchType) player, CancellationToken cancellationToken)
+    {
         var offered = await bridge.GetRecordAsync<BridgeActionsDto>(
             ScoutingBridgeClient.InSearch(BridgeQuery.FromGame(), player.SearchType)
                 .RefList(ScoutingConstants.Records, player.Root, player.Path)
@@ -252,13 +336,12 @@ internal sealed class ScoutingEditorBridgeClient(
                 .Props([ScoutingConstants.Actions]),
             cancellationToken);
 
-        if (offered.Values.Actions?.ContainsKey($"#{actionId.ToString(CultureInfo.InvariantCulture)}") != true)
-        {
-            return null;
-        }
+        return offered.Values.Actions?.Keys.ToHashSet() ?? [];
+    }
 
-        var menu = await bridge.GetRecordAsync<BridgeMenuDto>(OnAction(player, actionId).Props([ScoutingConstants.MenuItems]), cancellationToken);
-        return menu.Values.Items.Adapt<List<MenuEntry>>();
+    private static string ActionKey(uint actionId)
+    {
+        return $"#{actionId.ToString(CultureInfo.InvariantCulture)}";
     }
 
     public async Task<ScoutedPlayer?> RunMenuEntryAsync(
