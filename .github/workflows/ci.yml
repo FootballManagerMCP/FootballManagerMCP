@@ -5,6 +5,10 @@ on:
     branches: [main]
   pull_request:
 
+# Building and testing only reads the code.
+permissions:
+  contents: read
+
 jobs:
   build-and-test:
     # Everything but the plugin, which builds only against an installed Football Manager 27 with BepInEx. The test
