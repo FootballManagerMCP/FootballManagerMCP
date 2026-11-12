@@ -1,4 +1,5 @@
 using System.Globalization;
+using FootballManager.Domain.Competitions;
 using FootballManager.Domain.Database;
 using FootballManager.Domain.Matches;
 using FootballManager.Domain.Messages;
@@ -7,8 +8,10 @@ using FootballManager.Domain.Scouting;
 using FootballManager.Domain.Tactics;
 using FootballManager.Domain.Tactics.Editing;
 using FootballManager.Domain.Tactics.Effectiveness;
+using FootballManager.Domain.Training;
 using FootballManager.Infrastructure.Constants;
 using FootballManager.Infrastructure.Dtos;
+using FootballManager.Infrastructure.Dtos.Competitions;
 using FootballManager.Infrastructure.Dtos.Database;
 using FootballManager.Infrastructure.Dtos.Matches;
 using FootballManager.Infrastructure.Dtos.Messages;
@@ -17,6 +20,7 @@ using FootballManager.Infrastructure.Dtos.Scouting;
 using FootballManager.Infrastructure.Dtos.Tactics;
 using FootballManager.Infrastructure.Dtos.Tactics.Editing;
 using FootballManager.Infrastructure.Dtos.Tactics.Effectiveness;
+using FootballManager.Infrastructure.Dtos.Training;
 using Mapster;
 
 namespace FootballManager.Infrastructure.Mappings;
@@ -61,6 +65,108 @@ public class MappingConfig
         RegisterScouting(config);
         RegisterMessages(config);
         RegisterDatabase(config);
+        RegisterTraining(config);
+        RegisterCompetitions(config);
+    }
+
+    // A competition's stats screen, and the contract of a player in it as the game shows the user.
+    private static void RegisterCompetitions(TypeAdapterConfig config)
+    {
+        config.NewConfig<BridgeCompetitionDto, CompetitionInfo>()
+            .Map(dest => dest.Id, src => src.Id ?? 0)
+            .Map(dest => dest.Name, src => src.Name ?? string.Empty)
+            .Map(dest => dest.Nation, src => Text(src.Nation))
+            // Set by the client, which knows which league is the user's.
+            .Ignore(dest => dest.IsUserLeague);
+
+        config.NewConfig<BridgeStatRowDto, CompetitionStatRow>()
+            .Map(dest => dest.PlayerId, src => src.PlayerId ?? 0)
+            .Map(dest => dest.Name, src => src.Name ?? string.Empty)
+            .Map(dest => dest.Team, src => Text(src.Team))
+            .Map(dest => dest.Positions, src => src.Positions == null ? new List<PitchPosition>() : PositionMasks.All(src.Positions.Value))
+            .Map(dest => dest.Value, src => Math.Round(src.Value ?? 0, 2))
+            // Set by the client from the rows' order.
+            .Ignore(dest => dest.Rank)
+            .Ignore(dest => dest.RowIndex);
+
+        // A contract without an end (amateur and non-contract terms) is dated 1900; a wage that doesn't apply reads "N/A"
+        // with 0, and a club that hasn't set an asking price sends -1.
+        config.NewConfig<BridgePlayerContractDto, PlayerContract>()
+            .Map(dest => dest.Status, src => src.Status == null ? null : Text(src.Status.DisplayValue))
+            .Map(dest => dest.Type, src => src.Type == null ? null : Text(src.Type.DisplayValue))
+            .Map(dest => dest.EndDate, src => src.HasEndDate == true && !IsBlankDate(src.EndDate) ? src.EndDate : null)
+            .Map(dest => dest.Wage, src => src.Wage != null && src.Wage.PropertyValue > 0 ? Text(src.Wage.DisplayValue) : null)
+            .Map(dest => dest.Value, src => src.Value == null ? null : Text(src.Value.TransferValueRangeString))
+            .Map(dest => dest.AskingPrice, src => src.Value != null && src.Value.AskingPrice > 0 ? src.Value.AskingPrice : null)
+            .Map(dest => dest.TransferStatus, src => src.TransferStatus == null || src.TransferStatus.TransferStatusDescription == null
+                ? null
+                : Text(src.TransferStatus.TransferStatusDescription.Text));
+    }
+
+    // A player's training as his individual training screen shows it: the position and role he trains in (those he plays
+    // unless picked otherwise), and the dropdowns' current rows. "---" is the game's unset row; a focus of -1 is none.
+    // His role key needs the in-possession role names, passed as RoleKeysParameter. A calendar day holds its sessions
+    // and, on a match day, the fixture as an event of its own.
+    private static void RegisterTraining(TypeAdapterConfig config)
+    {
+        config.NewConfig<BridgeOptionDto, TrainingOption>()
+            .Map(dest => dest.Id, src => src.PropertyValue ?? 0)
+            .Map(dest => dest.Name, src => src.DisplayValue ?? string.Empty);
+
+        config.NewConfig<BridgeOptionDto, TrainingSessionCategory>()
+            .Map(dest => dest.Id, src => (int)(src.PropertyValue ?? 0))
+            .Map(dest => dest.Name, src => src.DisplayValue ?? string.Empty)
+            .Ignore(dest => dest.Sessions);
+
+        config.NewConfig<BridgePlayerTrainingDto, PlayerTraining>()
+            .Map(dest => dest.PlayerId, src => src.Id ?? 0)
+            .Map(dest => dest.Name, src => src.Name ?? string.Empty)
+            .Map(dest => dest.Position, src => PositionCode(src.Position))
+            .Map(dest => dest.RoleKey, src => RoleKey(src.RoleId))
+            .Map(dest => dest.RoleName, src => Text(src.RoleName))
+            .Map(dest => dest.FollowsMatchRole, src => src.PositionChoice == TrainingConstants.MatchPosition)
+            .Map(dest => dest.OutOfPossessionRole, src => Chosen(src.OutOfPossessionRole))
+            .Map(dest => dest.Focus, src => src.Focus == null || src.Focus.PropertyValue == null || src.Focus.PropertyValue < 0 ? null : src.Focus)
+            .Map(dest => dest.Intensity, src => src.Intensity == null || src.Intensity.PropertyValue == null ? null : src.Intensity)
+            .Map(dest => dest.IntensityIsAutomatic, src => src.IntensityAutomatic == true)
+            .Map(dest => dest.RestDays, src => src.RestDays > 0 ? src.RestDays : null)
+            // The game sends 0 for a player who hasn't trained lately (injured, say).
+            .Map(dest => dest.Rating, src => src.Rating > 0 ? (double?)Math.Round(src.Rating.Value, 2) : null)
+            .Map(dest => dest.Workload, src => Text(src.Workload))
+            .Map(dest => dest.CanEditFocus, src => src.FocusCanEdit == true && src.FocusHumanControlled == true)
+            .Map(dest => dest.CanEditIntensity, src => src.IntensityCanEdit == true)
+            .Map(dest => dest.FocusChoices, src => TrainingRows.Of(src.FocusChoices).Select(row => row.PropertyValue!.Value).ToList())
+            .Map(dest => dest.IntensityChoices, src => TrainingRows.Of(src.IntensityChoices, TrainingConstants.Holidays)
+                .Select(row => row.PropertyValue!.Value).ToList());
+
+        config.NewConfig<BridgeTrainingWeekDto, TrainingWeek>()
+            .Map(dest => dest.StartDate, src => Text(src.WeekStartDate))
+            .Map(dest => dest.Days, src => src.Days().Where(day => day.Day != null).Select(day => day.Day!).ToList());
+
+        config.NewConfig<BridgeTrainingDayDto, TrainingDay>()
+            .Map(dest => dest.Date, src => src.Date ?? string.Empty)
+            .Map(dest => dest.Sessions, src => (src.Events ?? new List<BridgeCalendarEventDto>())
+                .Where(e => e.SessionName != null && e.SessionIndex != null).ToList())
+            .Map(dest => dest.Match, src => (src.Events ?? new List<BridgeCalendarEventDto>())
+                .Where(e => e.CalendarEvent == TrainingConstants.MatchEvent).Select(e => Text(e.MatchVenue)).FirstOrDefault());
+
+        config.NewConfig<BridgeCalendarEventDto, TrainingSession>()
+            .Map(dest => dest.Slot, src => src.SessionIndex ?? 0)
+            .Map(dest => dest.Type, src => src.SessionType ?? 0)
+            .Map(dest => dest.Name, src => src.SessionName ?? string.Empty)
+            .Map(dest => dest.Category, src => src.SessionCategory ?? -1)
+            .Map(dest => dest.CanEdit, src => src.CanEdit == true);
+    }
+
+    private static string? PositionCode(ulong? mask)
+    {
+        return mask is { } position ? PositionMasks.ToPosition(position)?.Code : null;
+    }
+
+    // A dropdown's current row, unless it's the unset one.
+    private static string? Chosen(BridgeOptionDto? row)
+    {
+        return row?.DisplayValue is { } label && label != TrainingConstants.Unset ? Text(label) : null;
     }
 
     // What the search shows of each kind: a person's club and nationality, a club's nation and league, a nation's

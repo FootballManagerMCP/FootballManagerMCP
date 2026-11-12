@@ -40,6 +40,23 @@ internal static class PositionMasks
         return mask & PositionBits;
     }
 
+    /// <summary>Every position a mask holds, e.g. a player's "D/WB (L)" as DL and WBL.</summary>
+    public static List<PitchPosition> All(ulong mask)
+    {
+        var bits = WithoutSide(mask);
+        var positions = new List<PitchPosition>();
+
+        for (var bit = 0; bit < ByBit.Length; bit++)
+        {
+            if ((bits & (1UL << bit)) != 0)
+            {
+                positions.Add(ByBit[bit]);
+            }
+        }
+
+        return positions;
+    }
+
     public static TacticalPosition? ToPosition(ulong mask)
     {
         var bits = WithoutSide(mask);

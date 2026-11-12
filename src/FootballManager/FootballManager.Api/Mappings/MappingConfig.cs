@@ -1,5 +1,7 @@
 using FootballManager.Api.Requests.Scouting;
+using FootballManager.Api.Responses.Competitions;
 using FootballManager.Api.Requests.Tactics.Editing;
+using FootballManager.Api.Requests.Training;
 using FootballManager.Api.Responses.Database;
 using FootballManager.Api.Responses.Matches;
 using FootballManager.Api.Responses.Messages;
@@ -8,6 +10,8 @@ using FootballManager.Api.Responses.Scouting;
 using FootballManager.Api.Responses.Teams;
 using FootballManager.Api.Responses.Trials;
 using FootballManager.Api.Responses.Tactics.Effectiveness;
+using FootballManager.Api.Responses.Training;
+using FootballManager.Domain.Competitions;
 using FootballManager.Domain.Database;
 using FootballManager.Domain.Matches;
 using FootballManager.Domain.Messages;
@@ -17,6 +21,7 @@ using FootballManager.Domain.Tactics;
 using FootballManager.Domain.Tactics.Editing;
 using FootballManager.Domain.Tactics.Effectiveness;
 using FootballManager.Domain.Teams;
+using FootballManager.Domain.Training;
 using Mapster;
 
 namespace FootballManager.Api.Mappings;
@@ -51,9 +56,52 @@ public class MappingConfig
         RegisterMatches(config);
         RegisterScouting(config);
         RegisterMessages(config);
+        RegisterTraining(config);
+        RegisterCompetitions(config);
 
         config.NewConfig<DatabaseSearch, DatabaseSearchResponse>()
             .Map(dest => dest.Count, src => src.Results.Count);
+    }
+
+    // Flags that only repeat the usual case are left out: most sessions can't be changed, most players' intensity is
+    // set by hand, and their focus and intensity are the user's to set. A request leaves out what it doesn't change.
+    private static void RegisterTraining(TypeAdapterConfig config)
+    {
+        config.NewConfig<TrainingSession, TrainingSessionResponse>()
+            .Map(dest => dest.CanEdit, src => src.CanEdit ? true : (bool?)null);
+
+        config.NewConfig<PlayerTraining, PlayerTrainingResponse>()
+            .Map(dest => dest.IntensityIsAutomatic, src => src.IntensityIsAutomatic ? true : (bool?)null)
+            .Map(dest => dest.FocusLocked, src => src.CanEditFocus ? (bool?)null : true)
+            .Map(dest => dest.IntensityLocked, src => src.CanEditIntensity ? (bool?)null : true);
+
+        config.NewConfig<SessionChange, SessionChangeResponse>()
+            .Map(dest => dest.From, src => src.Change.From)
+            .Map(dest => dest.To, src => src.Change.To)
+            .Map(dest => dest.Done, src => src.Change.Done);
+
+        config.NewConfig<TrainingChanges, TrainingChangesResponse>()
+            .Map(dest => dest.Notes, src => src.Notes.Count > 0 ? src.Notes : null);
+
+        config.NewConfig<SetTrainingRequest, TrainingEdits>()
+            .Map(dest => dest.Players, src => src.Players ?? new List<PlayerTrainingRequest>())
+            .Map(dest => dest.Sessions, src => src.Sessions ?? new List<SessionRequest>());
+    }
+
+    // A player's stats come keyed by stat, which reads shorter than a list in long player lists.
+    private static void RegisterCompetitions(TypeAdapterConfig config)
+    {
+        config.NewConfig<List<CompetitionInfo>, CompetitionListResponse>()
+            .Map(dest => dest.Competitions, src => src);
+
+        config.NewConfig<CompetitionInfo, CompetitionResponse>()
+            .Map(dest => dest.IsUserLeague, src => src.IsUserLeague ? true : (bool?)null);
+
+        config.NewConfig<CompetitionPlayer, CompetitionPlayerResponse>()
+            .Map(dest => dest.PositionCodes, src => src.Positions)
+            .Map(dest => dest.Stats, src => src.Stats.ToDictionary(
+                stat => stat.Stat.ToString(),
+                stat => stat.Adapt<CompetitionStatValueResponse>()));
     }
 
     // A message's flags are left out when false, except whether it's been read.

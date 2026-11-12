@@ -18,6 +18,8 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IInboxService, InboxService>();
         services.AddScoped<IDatabaseSearchService, DatabaseSearchService>();
         services.AddScoped<ITrialsService, TrialsService>();
+        services.AddScoped<ITrainingService, TrainingService>();
+        services.AddScoped<ICompetitionsService, CompetitionsService>();
         return services;
     }
 }
