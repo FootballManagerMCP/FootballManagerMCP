@@ -66,7 +66,8 @@ Everything runs on your PC. Nothing is sent anywhere, except what your AI client
 | | `get_scouted_players` | Players from a scouting list (recommendations, shortlist, a focus, the player search) |
 | | `run_player_search` | Runs the game's player search with filters (age, positions, grade, quick filters, interest) |
 | | `create_recruitment_focus` / `remove_recruitment_focus` | Adds or removes a recruitment focus |
-| | `scout_player` / `shortlist_player` | Sends a scout to watch a player; adds a player to the shortlist or takes him off |
+| | `scout_player` / `shortlist_player` | Sends a scout to watch a player; adds a player to one of your shortlists (by name) or takes him off |
+| | `create_shortlist` | Makes a new named shortlist, e.g. for players found with `get_competition_stats` |
 | | `scout_team` | Sends scouts to watch every player of a team, one assignment each |
 | Recruitment | `get_competitions` | The leagues whose stats screens can be read: yours, and those the game plays out on your continent, with their reputation |
 | | `get_competition_stats` | A league's players ranked by any stat of its stats screen (xG, tackles won, passes completed, headers won, saves...), filtered by position, age and minutes, each cross-checked with your scouting and his contract |
@@ -90,7 +91,7 @@ review and a match plan with these tools (see [step 8](#8-optional-install-the-t
   request at a time, so nothing else reads or writes while another team is the current one.
 - **Every change is a dry run first.** The tools that change something (`set_tactic`, `run_player_search`,
   `create_recruitment_focus`, `remove_recruitment_focus`, `scout_player`, `scout_team`, `shortlist_player`,
-  `offer_trials`, `end_trials`, `set_training`) only check and describe the change unless they're called with
+  `create_shortlist`, `offer_trials`, `end_trials`, `set_training`) only check and describe the change unless they're called with
   `apply: true`. Their descriptions tell the AI to ask you before applying.
 - **Scouting shows its cost first.** Scouting has no price up front: it costs travel and expenses as the scout works.
   The dry runs of `scout_player` and `scout_team` show the season's scouting budget (spent and left) and the game's own

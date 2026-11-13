@@ -24,6 +24,9 @@ public interface IScoutingEditorGameClient
     /// <summary>Removes the focus (one of <see cref="IScoutingGameClient.GetFocusesAsync"/>'s).</summary>
     Task RemoveFocusAsync(int focusId, CancellationToken cancellationToken = default);
 
+    /// <summary>Makes a new shortlist with this name, as the game's "new shortlist" dialog does.</summary>
+    Task CreateShortlistAsync(string name, CancellationToken cancellationToken = default);
+
     /// <summary>
     /// A player from one of the user's scouting lists (the scouting centre's recommendations, the shortlist, a
     /// focus's players), or null when none holds him.

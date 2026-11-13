@@ -330,7 +330,20 @@ public class MappingConfig
             .Map(dest => dest.HighlyRecommendedPlayers, src => src.Centre == null ? null : src.Centre.HighlyRecommendedPlayersCount)
             .Map(dest => dest.RequestedReports, src => src.Centre == null ? null : src.Centre.RequestedReportsCount)
             .Map(dest => dest.FocusesShown, src => src.FocusListType == null ? null : (FocusListFilter?)src.FocusListType.Value)
-            .Ignore(dest => dest.Scouts, dest => dest.Focuses);
+            .Ignore(dest => dest.Scouts, dest => dest.Focuses, dest => dest.Shortlists);
+
+        // A shortlist's size comes as text ("14 players"); which one the screen shows is set by the client.
+        config.NewConfig<BridgeShortlistDto, Shortlist>()
+            .Map(dest => dest.Name, src => Text(src.DisplayString) ?? string.Empty)
+            .Map(dest => dest.Players, src => LeadingNumber(src.CountString))
+            .Map(dest => dest.IsDefault, src => src.IsDefault == true)
+            .Ignore(dest => dest.IsSelected);
+    }
+
+    private static int? LeadingNumber(string? text)
+    {
+        var digits = new string((text ?? string.Empty).SkipWhile(c => !char.IsDigit(c)).TakeWhile(char.IsDigit).ToArray());
+        return digits.Length > 0 ? int.Parse(digits, CultureInfo.InvariantCulture) : null;
     }
 
     private static void RegisterMatches(TypeAdapterConfig config)

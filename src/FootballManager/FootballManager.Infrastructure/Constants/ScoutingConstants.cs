@@ -30,6 +30,15 @@ internal static class ScoutingConstants
     public const string ScoutedPlayersCount = "HumanScoutedPlayersCount";
     public const string PlayerRecruitment = "IsPlayerRecruitment";
 
+    // The user's shortlists ("sélections"), also only with IsPlayerRecruitment set: the default one and any made by name,
+    // and the one the shortlist screen shows. A new one is made as its "new shortlist" dialog does: the event on the
+    // user's manager (the main team's manager), with the name typed in as its data. The game ignores the event unless
+    // its shortlist screen is open.
+    public const string Shortlists = "HumanShortlists";
+    public const string SelectedShortlist = "HumanSelectedShortlist";
+    public const string CreateShortlistEvent = "EventFmxCreateShortlist";
+    public const string Manager = TeamConstants.OwnTeam + ".Manager";
+
     // On a player.
     public const string ClubName = "Club.Name";
     public const string NationName = "Nation.Name";

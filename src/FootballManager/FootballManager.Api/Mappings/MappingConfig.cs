@@ -121,6 +121,10 @@ public class MappingConfig
     // Flags and empty lists that only repeat the usual case are left out, keeping long player lists short.
     private static void RegisterScouting(TypeAdapterConfig config)
     {
+        config.NewConfig<Shortlist, ShortlistResponse>()
+            .Map(dest => dest.IsDefault, src => src.IsDefault ? true : (bool?)null)
+            .Map(dest => dest.IsSelected, src => src.IsSelected ? true : (bool?)null);
+
         config.NewConfig<ScoutedPlayerList, ScoutedPlayerListResponse>()
             .Map(dest => dest.Count, src => src.Players.Count)
             .Map(dest => dest.HiddenDataMasked, src => src.HiddenDataMasked ? true : (bool?)null);

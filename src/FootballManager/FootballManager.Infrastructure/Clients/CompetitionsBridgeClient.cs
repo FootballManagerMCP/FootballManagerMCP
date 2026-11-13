@@ -17,12 +17,14 @@ namespace FootballManager.Infrastructure.Clients;
 // user's league from his club; the others through the user's continent's nations and their leagues), read with the
 // stat's table and stage as contexts. A table's players are read in full from their rows, with the user's manager and
 // team as contexts, so the game answers with what the club's scouting knows of them.
-internal sealed class CompetitionsBridgeClient(GameBridge bridge, GameVocabulary vocabulary) : ICompetitionsGameClient
+internal sealed class CompetitionsBridgeClient(GameBridge bridge, GameVocabulary vocabulary, CompetitionPlaces places)
+    : ICompetitionsGameClient
 {
-    // Where each known competition is, by id, once listed.
-    private readonly Dictionary<int, string> _paths = [];
     // Shared by every request: two tool calls at once would otherwise read tables side by side.
     private static readonly SemaphoreSlim TableReads = new(1, 1);
+
+    // Where each known competition is, by id, once listed.
+    private readonly Dictionary<int, string> _paths = [];
     private CompetitionInfo? _userLeague;
 
     public async Task<CompetitionInfo> GetUserLeagueAsync(CancellationToken cancellationToken = default)
@@ -130,12 +132,20 @@ internal sealed class CompetitionsBridgeClient(GameBridge bridge, GameVocabulary
                 OnTable(stat).Base($"{path}.{CompetitionConstants.Table}").Props([CompetitionConstants.Label]),
                 cancellationToken);
 
-            return new CompetitionStatTable
+            var table = new CompetitionStatTable
             {
                 Stat = stat,
                 Label = header.Values.Label,
                 Rows = Rows(rows)
             };
+
+            // Each player listed can be scouted or shortlisted from his row next.
+            foreach (var row in table.Rows)
+            {
+                places.Remember(row.PlayerId, Place(path, stat, row.RowIndex));
+            }
+
+            return table;
         }
         finally
         {
@@ -249,16 +259,37 @@ internal sealed class CompetitionsBridgeClient(GameBridge bridge, GameVocabulary
     }
 
     // A stat's table, for all stages. The gender goes along for the lists the path may go through.
+    private static List<KeyValuePair<string, long>> TableContexts(CompetitionStat stat)
+    {
+        return
+        [
+            new(CompetitionConstants.GenderContext, CompetitionConstants.Men),
+            new(CompetitionConstants.StatContext, CompetitionConstants.StatIds[stat]),
+            new(CompetitionConstants.StageContext, CompetitionConstants.AllStages)
+        ];
+    }
+
     private static BridgeQuery OnTable(CompetitionStat stat)
     {
-        return ForMen(BridgeQuery.FromHuman())
-            .Context(CompetitionConstants.StatContext, CompetitionConstants.StatIds[stat])
-            .Context(CompetitionConstants.StageContext, CompetitionConstants.AllStages);
+        var query = BridgeQuery.FromHuman();
+
+        foreach (var (name, value) in TableContexts(stat))
+        {
+            query = query.Context(name, value);
+        }
+
+        return query;
+    }
+
+    // A player at his row of a stat's table, which reaches him for reads and for his menu's actions.
+    private static PlayerPlace Place(string path, CompetitionStat stat, int rowIndex)
+    {
+        return new PlayerPlace(GameConstants.HumanRoot, $"{path}.{CompetitionConstants.Row(rowIndex)}", Contexts: TableContexts(stat));
     }
 
     private static BridgeQuery OnPlayer(string path, CompetitionRowReference row)
     {
-        return OnTable(row.Stat).WithHumanAndTeam().Base($"{path}.{CompetitionConstants.Row(row.RowIndex)}");
+        return Place(path, row.Stat, row.RowIndex).Read().WithHumanAndTeam();
     }
 
     private static BridgeQuery ForMen(BridgeQuery query)

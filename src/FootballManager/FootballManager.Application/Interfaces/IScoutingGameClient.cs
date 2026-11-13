@@ -18,6 +18,9 @@ public interface IScoutingGameClient
     /// <summary>The club's recruitment focuses.</summary>
     Task<List<RecruitmentFocus>> GetFocusesAsync(CancellationToken cancellationToken = default);
 
+    /// <summary>The user's shortlists, flagging the one the shortlist screen shows.</summary>
+    Task<List<Shortlist>> GetShortlistsAsync(CancellationToken cancellationToken = default);
+
     /// <summary>
     /// The players of a scouting list, as the club's scouting knows them: the scouting centre's recommendations, the
     /// shortlist, a focus's <paramref name="pool"/> (<paramref name="focusId"/> being one of

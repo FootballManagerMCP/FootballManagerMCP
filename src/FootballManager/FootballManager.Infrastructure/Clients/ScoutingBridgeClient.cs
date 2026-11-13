@@ -33,14 +33,35 @@ internal sealed class ScoutingBridgeClient(
             cancellationToken);
         var focuses = GetFocusesAsync(cancellationToken);
         var budget = GetBudgetAsync(cancellationToken);
+        var shortlists = GetShortlistsAsync(cancellationToken);
 
-        await Task.WhenAll(counts, scouts, focuses, budget);
+        await Task.WhenAll(counts, scouts, focuses, budget, shortlists);
 
         var overview = (await counts).Values.Adapt<ScoutingOverview>();
         overview.Budget = await budget;
         overview.Scouts = (await scouts).Items.Select(scout => scout.Values.Adapt<Scout>()).ToList();
         overview.Focuses = await focuses;
+        overview.Shortlists = await shortlists;
         return overview;
+    }
+
+    public async Task<List<Shortlist>> GetShortlistsAsync(CancellationToken cancellationToken = default)
+    {
+        var lists = await bridge.GetRecordAsync<BridgeShortlistsDto>(
+            BridgeQuery.FromHuman()
+                .WithHumanAndTeam()
+                .Context(ScoutingConstants.PlayerRecruitment, true)
+                .Props([ScoutingConstants.Shortlists, ScoutingConstants.SelectedShortlist]),
+            cancellationToken);
+
+        var selected = lists.Values.Selected?.Index;
+
+        return (lists.Values.Shortlists ?? []).Select(list =>
+        {
+            var shortlist = list.Adapt<Shortlist>();
+            shortlist.IsSelected = list.Index == selected;
+            return shortlist;
+        }).ToList();
     }
 
     public async Task<ScoutingBudget> GetBudgetAsync(CancellationToken cancellationToken = default)

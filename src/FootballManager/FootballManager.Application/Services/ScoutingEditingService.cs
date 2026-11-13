@@ -34,9 +34,15 @@ public interface IScoutingEditingService
     Task<Result<TeamScoutingChange>> ScoutTeamAsync(
         int teamId, string? scout, ScoutingDuration duration, int? expectedPlayers, bool apply, CancellationToken cancellationToken = default);
 
-    /// <summary>Adds a player to the shortlist, only when <paramref name="apply"/> is set.</summary>
+    /// <summary>Makes a new shortlist by name, only when <paramref name="apply"/> is set.</summary>
+    Task<Result<ShortlistCreation>> CreateShortlistAsync(string name, bool apply, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Adds a player to one of the user's shortlists, named by <paramref name="shortlist"/> (needed once there are
+    /// several), only when <paramref name="apply"/> is set.
+    /// </summary>
     Task<Result<PlayerScoutingChange>> ShortlistPlayerAsync(
-        int playerId, ShortlistDuration duration, bool apply, CancellationToken cancellationToken = default);
+        int playerId, string? shortlist, ShortlistDuration duration, bool apply, CancellationToken cancellationToken = default);
 
     /// <summary>Takes a player off the shortlist, only when <paramref name="apply"/> is set.</summary>
     Task<Result<PlayerScoutingChange>> UnshortlistPlayerAsync(int playerId, bool apply, CancellationToken cancellationToken = default);
@@ -54,6 +60,9 @@ public class ScoutingEditingService(IScoutingEditorGameClient editor, IScoutingG
     private const int TimeDurations = (int)ScoutingDuration.OneMatch;
     public const int MaxStars = 20;
     public const int MaxNameLength = 120;
+
+    // The "new shortlist" dialog takes up to 100 characters.
+    public const int MaxShortlistNameLength = 100;
     private const int SuggestionsShown = 10;
 
     public async Task<Result<FocusCreation>> CreateFocusAsync(FocusBrief brief, bool apply, CancellationToken cancellationToken = default)
@@ -296,15 +305,107 @@ public class ScoutingEditingService(IScoutingEditorGameClient editor, IScoutingG
         };
     }
 
-    public Task<Result<PlayerScoutingChange>> ShortlistPlayerAsync(
-        int playerId, ShortlistDuration duration, bool apply, CancellationToken cancellationToken = default)
+    public async Task<Result<ShortlistCreation>> CreateShortlistAsync(string name, bool apply, CancellationToken cancellationToken = default)
     {
-        return ChangeAsync(playerId, PlayerMenuAction.AddToShortlist, apply, (_, menu) =>
-            menu.Count == 0
-                ? Result.Fail<List<int>>(new ValidationError("playerId", ["The game's menu has no entry to shortlist him."]))
-                : menu[0].Children.Count == 0 && menu[0].CanRun
-                    ? Result.Ok(new List<int> { 0 })
-                    : Duration(menu, [0], (int)duration, Enum.GetValues<ShortlistDuration>().Length), cancellationToken);
+        var wanted = name.Trim();
+
+        if (wanted.Length == 0 || wanted.Length > MaxShortlistNameLength)
+        {
+            return Result.Fail<ShortlistCreation>(new ValidationError("name",
+                [$"A shortlist's name runs from 1 to {MaxShortlistNameLength} characters."]));
+        }
+
+        try
+        {
+            var lists = await scouting.GetShortlistsAsync(cancellationToken);
+
+            if (lists.Any(list => GameNames.Normalise(list.Name) == GameNames.Normalise(wanted)))
+            {
+                return Result.Fail<ShortlistCreation>(new ValidationError("name", [$"There's already a shortlist called '{wanted}'."]));
+            }
+
+            if (!apply)
+            {
+                return Result.Ok(new ShortlistCreation { Name = wanted, Shortlists = lists });
+            }
+
+            await editor.CreateShortlistAsync(wanted, cancellationToken);
+
+            return Result.Ok(new ShortlistCreation
+            {
+                Applied = true,
+                Name = wanted,
+                Created = true,
+                Shortlists = await scouting.GetShortlistsAsync(cancellationToken)
+            });
+        }
+        catch (GameUnavailableException exception)
+        {
+            return Result.Fail<ShortlistCreation>(new GameUnavailableError(exception.Message));
+        }
+        catch (GameRejectedException exception)
+        {
+            return Result.Fail<ShortlistCreation>(new ValidationError("game", [exception.Message]));
+        }
+    }
+
+    public async Task<Result<PlayerScoutingChange>> ShortlistPlayerAsync(
+        int playerId, string? shortlist, ShortlistDuration duration, bool apply, CancellationToken cancellationToken = default)
+    {
+        List<Shortlist> lists;
+
+        try
+        {
+            lists = await scouting.GetShortlistsAsync(cancellationToken);
+        }
+        catch (GameUnavailableException exception)
+        {
+            return Result.Fail<PlayerScoutingChange>(new GameUnavailableError(exception.Message));
+        }
+
+        return await ChangeAsync(playerId, PlayerMenuAction.AddToShortlist, apply,
+            (_, menu) => PickShortlist(menu, lists, shortlist, duration), cancellationToken);
+    }
+
+    // The menu's entry lists the shortlists, each with its durations, once there are several; with only the default
+    // one, the durations come straight under it.
+    internal static Result<List<int>> PickShortlist(List<MenuEntry> menu, List<Shortlist> lists, string? shortlist, ShortlistDuration duration)
+    {
+        if (menu.Count == 0)
+        {
+            return Result.Fail<List<int>>(new ValidationError("playerId", ["The game's menu has no entry to shortlist him."]));
+        }
+
+        var add = menu[0];
+        var durations = Enum.GetValues<ShortlistDuration>().Length;
+
+        if (add.Children.Count == 0)
+        {
+            return add.CanRun
+                ? Result.Ok(new List<int> { 0 })
+                : Result.Fail<List<int>>(new ValidationError("playerId", ["The game won't shortlist him."]));
+        }
+
+        var names = string.Join(", ", lists.Select(list => $"'{list.Name}'"));
+
+        if (add.Children.All(child => child.Children.Count == 0))
+        {
+            return shortlist is null || lists.Count == 1 && GameNames.Normalise(lists[0].Name) == GameNames.Normalise(shortlist)
+                ? Duration(menu, [0], (int)duration, durations)
+                : Result.Fail<List<int>>(new ValidationError("shortlist", [$"No shortlist called '{shortlist}': the user has {names}."]));
+        }
+
+        if (shortlist is null)
+        {
+            return Result.Fail<List<int>>(new ValidationError("shortlist", [$"The user has several shortlists: name one of {names}."]));
+        }
+
+        var index = add.Children.FindIndex(child => GameNames.Normalise(child.Label) == GameNames.Normalise(shortlist));
+
+        return index < 0
+            ? Result.Fail<List<int>>(new ValidationError("shortlist",
+                [$"No shortlist called '{shortlist}' to add him to: the game offers {string.Join(", ", add.Children.Select(child => $"'{child.Label}'"))}."]))
+            : Duration(menu, [0, index], (int)duration, durations);
     }
 
     public Task<Result<PlayerScoutingChange>> UnshortlistPlayerAsync(int playerId, bool apply, CancellationToken cancellationToken = default)
@@ -328,7 +429,7 @@ public class ScoutingEditingService(IScoutingEditorGameClient editor, IScoutingG
                 return Result.Fail<PlayerScoutingChange>(new ValidationError("playerId",
                     [$"Player {playerId} isn't in the user's scouting lists (the scouting centre's recommendations, the shortlist, " +
                      "a recruitment focus's players, or the player search's results), which get_scouted_players lists, nor " +
-                     "among the players the database search has found: search for him first."]));
+                     "among the players the database search or get_competition_stats has listed: list him there first."]));
             }
 
             var menu = await editor.GetMenuAsync(playerId, action, cancellationToken);
