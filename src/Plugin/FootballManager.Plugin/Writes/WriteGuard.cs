@@ -6,11 +6,13 @@ namespace FootballManager.Plugin.Writes;
 //
 // The game answers the next fixture's IsLiveMatch with true during its match and null otherwise (not false). Without
 // a next fixture the path runs through an empty record, which the game never answers: the fixture itself, answered
-// as empty, says there's no match then. Anything else unanswered refuses the write: it fails closed.
+// as empty, says there's no match then. It comes as null, or after the season's last match as the game's null
+// reference record. Anything else unanswered refuses the write: it fails closed.
 internal static class WriteGuard
 {
     private const string NextFixturePath = "Team.NextFixture";
     private const string LiveMatchPath = "Team.NextFixture.IsLiveMatch";
+    private const string NullReferenceType = "SI.Bindable.NullReference";
 
     public static void EnsureConfirmed(bool confirmed)
     {
@@ -49,6 +51,11 @@ internal static class WriteGuard
 
     private static bool NoFixture(PropertyBinding fixture)
     {
-        return fixture.Received && fixture.Value is null;
+        return fixture.Received
+               && (fixture.Value is null
+                   || fixture.Value is IReadOnlyDictionary<string, object?> record
+                   && record.Count == 1
+                   && record.TryGetValue("$type", out var type)
+                   && type as string == NullReferenceType);
     }
 }

@@ -8,6 +8,7 @@ public class ScoutingOverviewResponse
     public int? HighlyRecommendedPlayers { get; set; }
     public int? RequestedReports { get; set; }
     public int? ShortlistedPlayers { get; set; }
+    public List<ShortlistResponse> Shortlists { get; set; } = [];
     public int? ScoutedPlayers { get; set; }
     public ScoutingBudgetResponse? Budget { get; set; }
     public List<ScoutResponse> Scouts { get; set; } = [];

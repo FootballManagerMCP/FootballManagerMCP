@@ -30,6 +30,7 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<RemovedFocusLog>();
         services.AddSingleton<SearchPositions>();
         services.AddSingleton<SearchedRecords>();
+        services.AddSingleton<CompetitionPlaces>();
         services.AddScoped<GameVocabulary>();
         services.AddScoped<TeamInstructionReader>();
         services.AddScoped<ISquadGameClient, SquadBridgeClient>();
@@ -42,6 +43,8 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IScoutingEditorGameClient, ScoutingEditorBridgeClient>();
         services.AddScoped<IPlayerSearchGameClient, PlayerSearchBridgeClient>();
         services.AddScoped<IInboxGameClient, InboxBridgeClient>();
+        services.AddScoped<ITrainingGameClient, TrainingBridgeClient>();
+        services.AddScoped<ICompetitionsGameClient, CompetitionsBridgeClient>();
         services.AddScoped<DatabaseSearchBridgeClient>();
         services.AddScoped<IDatabaseSearchGameClient>(provider => provider.GetRequiredService<DatabaseSearchBridgeClient>());
 

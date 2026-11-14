@@ -123,7 +123,21 @@ public class ScoutingController(
         return result.ToGetResult<TeamScoutingChange, TeamScoutingChangeResponse>(c => c.Adapt<TeamScoutingChangeResponse>());
     }
 
-    /// <summary>Adds a player from the user's scouting lists to the shortlist; only with apply=true.</summary>
+    /// <summary>Makes a new shortlist by name; only with apply=true.</summary>
+    [HttpPost("shortlists")]
+    public async Task<Results<Ok<ShortlistCreationResponse>, BadRequest, NotFound, ProblemHttpResult>> CreateShortlistAsync(
+        [FromBody] CreateShortlistRequest request,
+        [FromQuery] bool apply = false,
+        CancellationToken cancellationToken = default)
+    {
+        var result = await editingService.CreateShortlistAsync(request.Name, apply, cancellationToken);
+        return result.ToGetResult<ShortlistCreation, ShortlistCreationResponse>(c => c.Adapt<ShortlistCreationResponse>());
+    }
+
+    /// <summary>
+    /// Adds a player from the user's scouting lists, the database search or a competition's stats to one of the
+    /// shortlists; only with apply=true.
+    /// </summary>
     [HttpPost("players/{playerId:int}/shortlist")]
     public async Task<Results<Ok<PlayerScoutingChangeResponse>, BadRequest, NotFound, ProblemHttpResult>> ShortlistPlayerAsync(
         int playerId,
@@ -131,7 +145,7 @@ public class ScoutingController(
         [FromQuery] bool apply = false,
         CancellationToken cancellationToken = default)
     {
-        var result = await editingService.ShortlistPlayerAsync(playerId, request.Duration, apply, cancellationToken);
+        var result = await editingService.ShortlistPlayerAsync(playerId, request.Shortlist, request.Duration, apply, cancellationToken);
         return result.ToGetResult<PlayerScoutingChange, PlayerScoutingChangeResponse>(c => c.Adapt<PlayerScoutingChangeResponse>());
     }
 

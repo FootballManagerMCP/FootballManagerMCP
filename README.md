@@ -66,10 +66,15 @@ Everything runs on your PC. Nothing is sent anywhere, except what your AI client
 | | `get_scouted_players` | Players from a scouting list (recommendations, shortlist, a focus, the player search) |
 | | `run_player_search` | Runs the game's player search with filters (age, positions, grade, quick filters, interest) |
 | | `create_recruitment_focus` / `remove_recruitment_focus` | Adds or removes a recruitment focus |
-| | `scout_player` / `shortlist_player` | Sends a scout to watch a player; adds a player to the shortlist or takes him off |
+| | `scout_player` / `shortlist_player` | Sends a scout to watch a player; adds a player to one of your shortlists (by name) or takes him off |
+| | `create_shortlist` | Makes a new named shortlist, e.g. for players found with `get_competition_stats` |
 | | `scout_team` | Sends scouts to watch every player of a team, one assignment each |
+| Recruitment | `get_competitions` | The leagues whose stats screens can be read: yours, and those the game plays out on your continent, with their reputation |
+| | `get_competition_stats` | A league's players ranked by any stat of its stats screen (xG, tackles won, passes completed, headers won, saves...), filtered by position, age and minutes, each cross-checked with your scouting and his contract |
 | Trials | `offer_trials` | Offers trials of 1 to 4 weeks to up to 50 players at once (free agents found with the player search, say) |
 | | `end_trials` | Ends trials, or withdraws offers not yet answered, for up to 50 players at once |
+| Training | `get_training` | This week's and next week's sessions, and each player's training position, role, additional focus, intensity and rating |
+| | `set_training` | Changes players' additional focus and intensity (or rests them), and sessions of the schedule |
 | Database | `search_database` | The game's search box: any player, staff member, club, competition or nation in the world |
 | Inbox | `get_inbox` | Your messages, newest first, with forwarded press articles on request |
 
@@ -86,8 +91,8 @@ review and a match plan with these tools (see [step 8](#8-optional-install-the-t
   request at a time, so nothing else reads or writes while another team is the current one.
 - **Every change is a dry run first.** The tools that change something (`set_tactic`, `run_player_search`,
   `create_recruitment_focus`, `remove_recruitment_focus`, `scout_player`, `scout_team`, `shortlist_player`,
-  `offer_trials`, `end_trials`) only check and describe the change unless they're called with `apply: true`. Their
-  descriptions tell the AI to ask you before applying.
+  `create_shortlist`, `offer_trials`, `end_trials`, `set_training`) only check and describe the change unless they're called with
+  `apply: true`. Their descriptions tell the AI to ask you before applying.
 - **Scouting shows its cost first.** Scouting has no price up front: it costs travel and expenses as the scout works.
   The dry runs of `scout_player` and `scout_team` show the season's scouting budget (spent and left) and the game's own
   confirmation message, and the game's warnings block the change. `scout_team`, `offer_trials` and `end_trials` only
@@ -353,10 +358,12 @@ Change the plugin's port in `mcpfm.bridge.cfg` and `InfrastructureSettings__Game
   tools use the game's ids rather than its text, so other languages should work, but they haven't been tested.
 - **Game updates can break it** (see [Updating](#updating)).
 - **Some data is the game's, as it keeps it.** Teams far from your competitions have few match numbers. A substitute's
-  position is the one of the slot he took: a reshuffle after a change isn't recorded.
+  position is the one of the slot he took: a reshuffle after a change isn't recorded. A competition's stats screen
+  keeps each stat's top 100 players for the current season only, and only for leagues the game plays out in full.
 - **First teams only, as tested.** After reading another team, `get_team` puts back your club's first team. If you
   manage a B team, a youth team or a national team, check your team after using it.
-- **Not yet covered:** training, replying to messages, continuing the game and match days.
+- **Not yet covered:** training positions and roles, replying to messages, making transfer or contract offers,
+  continuing the game and match days.
 - **Tests stop at the plugin.** Everything that talks to the game itself is checked by hand, in the game.
 
 ## Development

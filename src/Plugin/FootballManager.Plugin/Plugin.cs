@@ -9,7 +9,7 @@ public sealed class Plugin : BasePlugin
 {
     public const string Id = "mcpfm.bridge";
     public const string Name = "MCPFM Bridge";
-    public const string Version = "0.13.0";
+    public const string Version = "0.13.1";
 
     private BridgeServer? _server;
 

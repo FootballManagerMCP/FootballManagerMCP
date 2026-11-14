@@ -22,7 +22,8 @@ internal sealed class ScoutingEditorBridgeClient(
     RemovedFocusLog removed,
     SearchPositions searchPositions,
     DatabaseSearchBridgeClient databaseSearch,
-    TeamsBridgeClient teams)
+    TeamsBridgeClient teams,
+    CompetitionPlaces competitionPlaces)
     : IScoutingEditorGameClient
 {
     // The game shows a change a frame or more after its event.
@@ -35,10 +36,10 @@ internal sealed class ScoutingEditorBridgeClient(
     private static readonly string[] PlayerFlags =
         [GameConstants.UniqueId, GameConstants.Name, ScoutingConstants.IsShortlisted, ScoutingConstants.IsBeingScouted];
 
-    // Where each player was found, by id: a path to him through a list holding him (a scouting list, or a team's squad),
-    // from the user's manager (Human) or, for one found through the game's search, the game; and the person search's
-    // type when that list is one (the shortlist, the player search).
-    private readonly Dictionary<int, (string Root, string Path, int? SearchType)> _players = [];
+    // Where each player was found, by id: a path to him through a list holding him (a scouting list, a team's squad, a
+    // competition's stats table), from the user's manager (Human) or, for one found through the game's search, the game;
+    // with the contexts that list needs.
+    private readonly Dictionary<int, PlayerPlace> _players = [];
 
     public async Task<List<ScoutingArea>> GetAreasAsync(CancellationToken cancellationToken = default)
     {
@@ -134,6 +135,29 @@ internal sealed class ScoutingEditorBridgeClient(
         }, cancellationToken);
     }
 
+    // As the "new shortlist" dialog does once its name is typed in: the event on the user's manager, the name its data.
+    public async Task CreateShortlistAsync(string name, CancellationToken cancellationToken = default)
+    {
+        await bridge.WriteAsync<JsonElement>(
+            BridgeQuery.FromHuman()
+                .Base(ScoutingConstants.Manager)
+                .ToWrite("/native", ("event", ScoutingConstants.CreateShortlistEvent), ("data", JsonSerializer.Serialize(name)), ("template", "none")),
+            cancellationToken);
+
+        var listed = await SettleAsync(
+            () => scouting.GetShortlistsAsync(cancellationToken),
+            lists => lists.Any(list => list.Name == name) ? lists : null,
+            cancellationToken);
+
+        // The game only acts on it while its shortlist screen is open (as the dialog that sends it is).
+        if (listed is null)
+        {
+            throw new GameRejectedException(
+                $"The game didn't make the shortlist '{name}': it only does while its shortlist screen is open in the game. " +
+                "Ask the user to open that screen, then try again.");
+        }
+    }
+
     public async Task<ScoutedPlayer?> FindPlayerAsync(int playerId, CancellationToken cancellationToken = default)
     {
         var lists = await ScoutingListsAsync(cancellationToken);
@@ -141,6 +165,7 @@ internal sealed class ScoutingEditorBridgeClient(
         // The player search last, and on its own: it can hold a thousand players or more, read in half a minute.
         return (await FindInAsync([playerId], lists, cancellationToken)).GetValueOrDefault(playerId)
                ?? await FindInSearchAsync(playerId, cancellationToken)
+               ?? await FindInCompetitionsAsync(playerId, cancellationToken)
                ?? await FindInDatabaseSearchAsync(playerId, cancellationToken)
                ?? (await FindInAsync([playerId], [(ScoutingConstants.PersonSearch, ScoutingConstants.PlayerSearch)], cancellationToken))
                .GetValueOrDefault(playerId);
@@ -159,6 +184,14 @@ internal sealed class ScoutingEditorBridgeClient(
         foreach (var id in Missing(playerIds, found))
         {
             if (await FindInSearchAsync(id, cancellationToken) is { } player)
+            {
+                found[id] = player;
+            }
+        }
+
+        foreach (var id in Missing(playerIds, found))
+        {
+            if (await FindInCompetitionsAsync(id, cancellationToken) is { } player)
             {
                 found[id] = player;
             }
@@ -219,8 +252,21 @@ internal sealed class ScoutingEditorBridgeClient(
             return null;
         }
 
-        _players[playerId] = (GameConstants.GameRoot, path, null);
+        _players[playerId] = new PlayerPlace(GameConstants.GameRoot, path);
         return player.Values.Adapt<ScoutedPlayer>();
+    }
+
+    // The player at his row of a competition's stats table where get_competition_stats last listed him, if it still
+    // holds him: tables reorder as matches are played.
+    private async Task<ScoutedPlayer?> FindInCompetitionsAsync(int playerId, CancellationToken cancellationToken)
+    {
+        if (competitionPlaces.Of(playerId) is not { } place || await ReadAtAsync(playerId, place, cancellationToken) is not { } player)
+        {
+            return null;
+        }
+
+        _players[playerId] = place;
+        return player;
     }
 
     // The player at the place in the search where it was last listed, if he's still there.
@@ -254,7 +300,7 @@ internal sealed class ScoutingEditorBridgeClient(
             return null;
         }
 
-        _players[playerId] = (GameConstants.HumanRoot, path, ScoutingConstants.PlayerSearch);
+        _players[playerId] = new PlayerPlace(GameConstants.HumanRoot, path, ScoutingConstants.PlayerSearch);
         return player.Values.Adapt<ScoutedPlayer>();
     }
 
@@ -281,7 +327,7 @@ internal sealed class ScoutingEditorBridgeClient(
             {
                 if (player.Values.Id is { } id && wanted.Contains(id) && !found.ContainsKey(id))
                 {
-                    _players[id] = (GameConstants.HumanRoot, $"{lists[i].Path}[{GameConstants.UniqueId}={Format(id)}]", lists[i].SearchType);
+                    _players[id] = new PlayerPlace(GameConstants.HumanRoot, $"{lists[i].Path}[{GameConstants.UniqueId}={Format(id)}]", lists[i].SearchType);
                     found[id] = player.Values.Adapt<ScoutedPlayer>();
                 }
             }
@@ -319,10 +365,10 @@ internal sealed class ScoutingEditorBridgeClient(
     }
 
     // The menu actions the game offers for the player now, keyed as the game lists them ("#<action id>").
-    private async Task<HashSet<string>> OfferedAsync((string Root, string Path, int? SearchType) player, CancellationToken cancellationToken)
+    private async Task<HashSet<string>> OfferedAsync(PlayerPlace player, CancellationToken cancellationToken)
     {
         var offered = await bridge.GetRecordAsync<BridgeActionsDto>(
-            ScoutingBridgeClient.InSearch(BridgeQuery.FromGame(), player.SearchType)
+            player.On(BridgeQuery.FromGame())
                 .RefList(ScoutingConstants.Records, player.Root, player.Path)
                 .WithHumanAndTeam()
                 .Props([ScoutingConstants.Actions]),
@@ -381,7 +427,7 @@ internal sealed class ScoutingEditorBridgeClient(
         {
             if (player.Values.Id is { } id)
             {
-                _players[id] = (team.Root, $"{squad}[{GameConstants.UniqueId}={Format(id)}]", null);
+                _players[id] = new PlayerPlace(team.Root, $"{squad}[{GameConstants.UniqueId}={Format(id)}]");
                 found.Add(player.Values.Adapt<ScoutedPlayer>());
             }
         }
@@ -390,15 +436,12 @@ internal sealed class ScoutingEditorBridgeClient(
     }
 
     // The player at the place he was found, or null when he's no longer there.
-    private async Task<ScoutedPlayer?> ReadAtAsync(
-        int playerId, (string Root, string Path, int? SearchType) place, CancellationToken cancellationToken)
+    private async Task<ScoutedPlayer?> ReadAtAsync(int playerId, PlayerPlace place, CancellationToken cancellationToken)
     {
-        var root = place.Root == GameConstants.GameRoot ? BridgeQuery.FromGame() : BridgeQuery.FromHuman();
-
         try
         {
             var player = await bridge.GetRecordAsync<BridgeScoutedPlayerDto>(
-                ScoutingBridgeClient.InSearch(root, place.SearchType).Base(place.Path).WithHumanAndTeam().Props(PlayerFlags),
+                place.Read().WithHumanAndTeam().Props(PlayerFlags),
                 cancellationToken);
 
             return player.Values.Id == playerId ? player.Values.Adapt<ScoutedPlayer>() : null;
@@ -590,12 +633,12 @@ internal sealed class ScoutingEditorBridgeClient(
         return bridge.WriteAsync<BridgeWriteResultDto>(target.ToWrite("/set", ("path", path), ("value", value)), cancellationToken);
     }
 
-    private async Task<(string Root, string Path, int? SearchType)> LocateAsync(int playerId, CancellationToken cancellationToken)
+    private async Task<PlayerPlace> LocateAsync(int playerId, CancellationToken cancellationToken)
     {
         if (!_players.ContainsKey(playerId) && await FindPlayerAsync(playerId, cancellationToken) is null)
         {
             throw new GameRejectedException(
-                $"Player {playerId} isn't in the user's scouting lists, nor among the players the database search has found.");
+                $"Player {playerId} isn't in the user's scouting lists, nor among the players the database search or a competition's stats have listed.");
         }
 
         return _players[playerId];
@@ -603,7 +646,7 @@ internal sealed class ScoutingEditorBridgeClient(
 
     // Where the player is now. A place in the player search's results is checked first: the game reorders them as it
     // updates them (trialists arriving, say), and a stale place would reach a neighbour. He's looked for again then.
-    private async Task<(string Root, string Path, int? SearchType)> PlaceAsync(int playerId, CancellationToken cancellationToken)
+    private async Task<PlayerPlace> PlaceAsync(int playerId, CancellationToken cancellationToken)
     {
         var place = await LocateAsync(playerId, cancellationToken);
 
@@ -621,16 +664,16 @@ internal sealed class ScoutingEditorBridgeClient(
     }
 
     // A place in the player search by index, as its listed results were seen, rather than by the player's id.
-    private static bool IsSearchPlace((string Root, string Path, int? SearchType) place)
+    private static bool IsSearchPlace(PlayerPlace place)
     {
         return place.SearchType == ScoutingConstants.PlayerSearch
                && !place.Path.Contains($"[{GameConstants.UniqueId}=", StringComparison.Ordinal);
     }
 
     // The menu action for the player: game.Action, picked by its id, for the player as its only record.
-    private static BridgeQuery OnAction((string Root, string Path, int? SearchType) player, uint actionId)
+    private static BridgeQuery OnAction(PlayerPlace player, uint actionId)
     {
-        return ScoutingBridgeClient.InSearch(BridgeQuery.FromGame(), player.SearchType)
+        return player.On(BridgeQuery.FromGame())
             .Base(ScoutingConstants.Action)
             .Context(ScoutingConstants.ActionId, actionId)
             .RefList(ScoutingConstants.Records, player.Root, player.Path)

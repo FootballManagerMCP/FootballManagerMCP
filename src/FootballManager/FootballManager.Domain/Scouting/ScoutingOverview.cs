@@ -9,7 +9,10 @@ public class ScoutingOverview
     /// <summary>Reports the user asked for that are still being written.</summary>
     public int? RequestedReports { get; set; }
 
+    /// <summary>Players on the user's shortlists, every list together.</summary>
     public int? ShortlistedPlayers { get; set; }
+
+    public List<Shortlist> Shortlists { get; set; } = [];
 
     /// <summary>Every player the club's scouting knows something about.</summary>
     public int? ScoutedPlayers { get; set; }

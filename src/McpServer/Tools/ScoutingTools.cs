@@ -10,7 +10,9 @@ public static class ScoutingTools
     [McpServerTool(Name = "get_scouting")]
     [Description("Get the user's player recruitment set-up from their running Football Manager 27 save, read live from " +
                  "the game: how many players the scouting centre recommends (and how many highly), reports still being " +
-                 "written, the shortlist's size and how many players the club's scouting knows; the season's scouting budget " +
+                 "written, how many players the shortlists hold and how many the club's scouting knows; the user's " +
+                 "shortlists (name, size, the default one, the one the shortlist screen shows, which get_scouted_players " +
+                 "reads); the season's scouting budget " +
                  "with what's been spent this season and this month, what's left and the share spent (in pounds " +
                  "sterling, the unit the game keeps money in, whatever currency its screens show); the club's scouts with " +
                  "their judging player ability and potential (1-20); and every recruitment focus (the standing briefs " +
@@ -275,15 +277,20 @@ public static class ScoutingTools
     }
 
     [McpServerTool(Name = "shortlist_player")]
-    [Description("Add a player to the user's shortlist, or take him off it, through the player's own menu in the " +
-                 "running game. The player must be in one of the user's scouting lists, the player search's results " +
-                 "included (get_scouted_players), or have been found with search_database. By " +
-                 "default a dry run that returns the menu entry it would pick; call again with apply=true once the " +
-                 "user has agreed. Refused while a match is being played.")]
+    [Description("Add a player to one of the user's shortlists ('sélections' in a French game), or take him off, " +
+                 "through the player's own menu in the running game. The player must be in one of the user's scouting " +
+                 "lists, the player search's results included (get_scouted_players), or have been listed by " +
+                 "search_database or get_competition_stats. The user's shortlists are in get_scouting; once there are " +
+                 "several, name the one to add him to. By default a dry run that returns the menu entry it would pick " +
+                 "(e.g. 'Add to shortlist > Moneyball > Indefinitely'); call again with apply=true once the user has " +
+                 "agreed. Refused while a match is being played.")]
     public static async Task<string> ShortlistPlayer(
         IHttpClientFactory httpFactory,
-        [Description("The player's FM id, from get_scouted_players or search_database.")]
+        [Description("The player's FM id, from get_scouted_players, search_database or get_competition_stats.")]
         int playerId,
+        [Description("When adding, the shortlist's name as get_scouting lists it (the default one's is the game's label " +
+                     "for it, e.g. '(Par défaut)'). Needed once the user has several.")]
+        string? shortlist = null,
         [Description("True to take him off the shortlist instead of adding him.")]
         bool remove = false,
         [Description("When adding, how long he stays: Indefinitely (the default), OneMonth, ThreeMonths, SixMonths or OneYear.")]
@@ -296,7 +303,31 @@ public static class ScoutingTools
 
         var response = remove
             ? await http.DeleteAsync(path)
-            : await http.PostAsJsonAsync(path, new { duration });
+            : await http.PostAsJsonAsync(path, new { shortlist, duration });
+
+        return await response.ReadContentOrError();
+    }
+
+    [McpServerTool(Name = "create_shortlist")]
+    [Description("Make a new shortlist ('sélection' in a French game) in the running game, by name, as its 'new " +
+                 "shortlist' dialog does, e.g. to gather players found with get_competition_stats; shortlist_player " +
+                 "then adds players to it by name. By default a dry run that checks the name (1 to 100 characters, not " +
+                 "already a shortlist's) and lists the user's shortlists; call again with apply=true once the user has " +
+                 "agreed. The game only makes it while its shortlist screen is open: ask the user to open that screen " +
+                 "first. Renaming, deleting and switching the list the shortlist screen shows aren't covered yet. " +
+                 "Refused while a match is being played.")]
+    public static async Task<string> CreateShortlist(
+        IHttpClientFactory httpFactory,
+        [Description("The new shortlist's name.")]
+        string name,
+        [Description("False (the default) only checks. True makes the shortlist: only once the user has agreed.")]
+        bool apply = false)
+    {
+        var http = httpFactory.CreateClient("FootballManagerApi");
+
+        var response = await http.PostAsJsonAsync(
+            $"/api/v1/scouting/shortlists?apply={apply.ToString().ToLowerInvariant()}",
+            new { name });
 
         return await response.ReadContentOrError();
     }
