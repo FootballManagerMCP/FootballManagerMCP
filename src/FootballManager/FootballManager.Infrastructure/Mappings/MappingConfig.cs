@@ -36,6 +36,9 @@ public class MappingConfig
     /// <summary>The Mapster parameter giving the game's names for a player's status flags (GameVocabulary.StatusKeysAsync).</summary>
     public const string StatusKeysParameter = "statusKeys";
 
+    /// <summary>The Mapster parameter saying whether the user's team was at home, for which side a match incident was.</summary>
+    public const string IsHomeParameter = "isHome";
+
     private const string UnknownAmount = "-";
 
     // What the game sends for a player it has never scouted: 30000 days since (about 82 years), a report dated 1900.
@@ -401,6 +404,32 @@ public class MappingConfig
             .Map(dest => dest.AerialDuelsWon, src => src.AerialDuelsCompleted)
             .Map(dest => dest.Saves, src => src.TotalSaves)
             .Map(dest => dest.DistanceRun, src => src.DistanceRan);
+
+        // An incident's side is the game's (0 home, 1 away); whose it is from the user's side needs IsHomeParameter.
+        // MatchIncidents picks which incidents are goals, red cards or shoot-out kicks.
+        config.NewConfig<BridgeIncidentDto, MatchGoal>()
+            .Map(dest => dest.Minute, src => src.Minute ?? string.Empty)
+            .Map(dest => dest.IsOurs, src => IsOurs(src))
+            .Map(dest => dest.Kind, src => MatchIncidents.KindOf(src) ?? GoalKind.Goal)
+            .Map(dest => dest.Scorer, src => src.PlayerName)
+            .Map(dest => dest.Assister, src => src.SecondPlayerName);
+
+        config.NewConfig<BridgeIncidentDto, MatchRedCard>()
+            .Map(dest => dest.Minute, src => src.Minute ?? string.Empty)
+            .Map(dest => dest.IsOurs, src => IsOurs(src))
+            .Map(dest => dest.Player, src => src.PlayerName);
+
+        config.NewConfig<BridgeIncidentDto, PenaltyKick>()
+            .Map(dest => dest.IsOurs, src => IsOurs(src))
+            .Map(dest => dest.Taker, src => src.PlayerName)
+            .Map(dest => dest.Scored, src => src.IncidentType == MatchConstants.ShootoutScoredIncident);
+    }
+
+    private static bool IsOurs(BridgeIncidentDto incident)
+    {
+        return MapContext.Current?.Parameters.TryGetValue(IsHomeParameter, out var value) == true
+               && value is bool isHome
+               && (incident.Side == 0) == isHome;
     }
 
     private static void RegisterTactics(TypeAdapterConfig config)

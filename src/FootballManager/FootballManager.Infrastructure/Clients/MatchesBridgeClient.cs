@@ -58,22 +58,31 @@ internal sealed class MatchesBridgeClient(GameBridge bridge, GameVocabulary voca
         var theirs = SideAsync(index, !isHome, withPlayers: false, cancellationToken);
         var outOfPossession = LineupAsync(index, inPossession: false, cancellationToken);
         var events = EventsAsync(index, cancellationToken);
+        var incidents = IncidentsAsync(index, cancellationToken);
+        var named = PeopleAsync(index, isHome, cancellationToken);
 
-        await Task.WhenAll(ours, theirs, outOfPossession, events);
+        await Task.WhenAll(ours, theirs, outOfPossession, events, incidents, named);
 
-        var members = await squad;
+        var people = new MatchPeople(await squad, await named);
         var withBall = (await fixtures).Items[index].Values.Lineup ?? [];
-        var (lineup, substitutions) = await PlayersAsync(withBall, await outOfPossession, (await ours).Players ?? [], members, cancellationToken);
+        var lines = (await ours).Players ?? [];
+        var rearranged = MatchSubstitutions.Rearranged(withBall, lines);
+        var (lineup, substitutions) = await PlayersAsync(
+            withBall, await outOfPossession, lines, people, await incidents, rearranged, cancellationToken);
 
         return new MatchDetail
         {
             Summary = summary,
             TeamStats = (await ours).Stats.Adapt<TeamMatchStats?>(),
             OpponentStats = (await theirs).Stats.Adapt<TeamMatchStats?>(),
-            Goals = Goals(await events, isHome, members),
+            Goals = MatchIncidents.Goals(await incidents, isHome),
+            RedCards = MatchIncidents.RedCards(await incidents, isHome),
+            PenaltyShootout = MatchIncidents.Shootout(await incidents, isHome),
             Lineup = lineup,
             Substitutions = substitutions,
-            PlayerOfTheMatch = PlayerOfTheMatch(await events, members)
+            LineupRearranged = rearranged,
+            PlayerOfTheMatch = PlayerOfTheMatch(await events, people),
+            Analysis = Analysis(await events)
         };
     }
 
@@ -154,10 +163,56 @@ internal sealed class MatchesBridgeClient(GameBridge bridge, GameVocabulary voca
     private async Task<BridgeMatchEventsDto> EventsAsync(int match, CancellationToken cancellationToken)
     {
         var events = await bridge.GetListAsync<BridgeMatchEventsDto>(
-            Fixtures().Index(match).Context(MatchConstants.ShowAllEventTypes, true).Props(MatchConstants.Events),
+            Fixtures().Index(match).Props(MatchConstants.Events),
             cancellationToken);
 
         return events.Items.FirstOrDefault()?.Values ?? new BridgeMatchEventsDto();
+    }
+
+    // The match's goals, red cards and shoot-out penalties, oldest first, read as a list so each one's players can be
+    // named, whichever side they play for. A goal no one set up leaves its assister's name unanswered.
+    private async Task<List<BridgeIncidentDto>> IncidentsAsync(int match, CancellationToken cancellationToken)
+    {
+        var incidents = await bridge.GetListAsync<BridgeIncidentDto>(
+            BridgeQuery.FromHuman()
+                .List(MatchConstants.OfFixture(match, MatchConstants.Incidents))
+                .FixtureWindow()
+                .WithHumanAndTeam()
+                .Context(MatchConstants.ShowAllEventTypes, true)
+                .Props(MatchConstants.IncidentProps),
+            cancellationToken,
+            gapsExpected: true);
+
+        return incidents.Items.Select(item => item.Values).ToList();
+    }
+
+    // The user's players in the match as the match names them, by database index: it still knows those who have since
+    // left the club.
+    private async Task<Dictionary<int, BridgeMatchPersonDto>> PeopleAsync(int match, bool isHome, CancellationToken cancellationToken)
+    {
+        var people = await bridge.GetListAsync<BridgeMatchPersonDto>(
+            BridgeQuery.FromHuman()
+                .List(MatchConstants.OfFixture(match, MatchConstants.PlayerStats))
+                .FixtureWindow()
+                .WithHumanAndTeam()
+                .Context(MatchConstants.IsHomeTeam, isHome)
+                .Props(MatchConstants.PlayerStatsPeople),
+            cancellationToken);
+
+        return people.Items
+            .Select(item => item.Values)
+            .Where(person => person.Player?.Index is not null)
+            .GroupBy(person => person.Player!.Index!.Value)
+            .ToDictionary(group => group.Key, group => group.First());
+    }
+
+    private static List<string> Analysis(BridgeMatchEventsDto events)
+    {
+        return (events.Analysis ?? [])
+            .Select(point => point.AnalysisPointString)
+            .Where(text => !string.IsNullOrWhiteSpace(text))
+            .Select(text => text!)
+            .ToList();
     }
 
     // The players who took part, with their positions in both phases (a substitute's those of the slot he took), when
@@ -166,7 +221,9 @@ internal sealed class MatchesBridgeClient(GameBridge bridge, GameVocabulary voca
         List<BridgeLineupEntryDto> withBall,
         List<BridgeLineupEntryDto> withoutBall,
         List<BridgePlayerMatchStatsDto> stats,
-        IReadOnlyDictionary<int, SquadMember> squad,
+        MatchPeople people,
+        List<BridgeIncidentDto> incidents,
+        bool rearranged,
         CancellationToken cancellationToken)
     {
         var outOfPossession = LineupPairing.OutOfPossessionBySlot(withBall, withoutBall);
@@ -187,15 +244,18 @@ internal sealed class MatchesBridgeClient(GameBridge bridge, GameVocabulary voca
         var players = lineup.OrderBy(entry => entry.TeamSelectionIndex).Select(async entry =>
         {
             var person = entry.Player?.Index;
-            var member = person is { } index ? squad.GetValueOrDefault(index) : null;
+            var member = person is { } index ? people.Member(index) : null;
             var line = person is { } key ? statsByPlayer.GetValueOrDefault(key) : null;
             var isSubstitute = entry.MatchWasSubbedOn == true;
             var cameOn = isSubstitute ? changes.FirstOrDefault(change => change.OnPlayer == person) : null;
 
-            // A substitute plays in the slot he took: where he finished, or the one he was traced to.
+            // A substitute plays in the slot of the player he replaced. Where that isn't known, the slot he finished in
+            // says it, unless the game renumbered the slots during the match.
             var slot = !isSubstitute
                 ? entry.TeamSelectionIndex
-                : (line is { PlayerTeamSelectionIndex: >= 0 } ? line.PlayerTeamSelectionIndex : cameOn?.Slot);
+                : cameOn is { Uncertain: false, Slot: { } replacedSlot }
+                    ? replacedSlot
+                    : (cameOn is null && !rearranged && line is { PlayerTeamSelectionIndex: >= 0 } ? line.PlayerTeamSelectionIndex : null);
 
             var withBallEntry = !isSubstitute
                 ? entry
@@ -204,7 +264,7 @@ internal sealed class MatchesBridgeClient(GameBridge bridge, GameVocabulary voca
 
             // The slot's role is named from the replaced player's role table when the substitute's lacks it (a table
             // only lists the positions its player can play).
-            var replaced = isSubstitute && withBallEntry?.Player?.Index is { } starter ? squad.GetValueOrDefault(starter) : null;
+            var replaced = isSubstitute && withBallEntry?.Player?.Index is { } starter ? people.Member(starter) : null;
 
             var inPossessionPosition = PositionAsync(member, withBallEntry, inPossession: true, replaced, cancellationToken);
             var outOfPossessionPosition = PositionAsync(member, withoutBallEntry, inPossession: false, replaced, cancellationToken);
@@ -212,13 +272,17 @@ internal sealed class MatchesBridgeClient(GameBridge bridge, GameVocabulary voca
             var minuteOn = !isSubstitute
                 ? null
                 : (line is { IncidentType: MatchConstants.CameOnIncident } ? line.MatchTime : cameOn?.Minute);
-            var minuteOff = line is { PlayerTeamSelectionIndex: < 0 } ? line.MatchTime : null;
+
+            // A player sent off keeps his first booking's minute on his line: the red card has the right one.
+            var minuteOff = line is not { PlayerTeamSelectionIndex: < 0 }
+                ? null
+                : (line.RedCardedInMatch == true && person is { } sentOff ? MatchIncidents.SentOffMinute(incidents, sentOff) : null) ?? line.MatchTime;
 
             return new MatchLineupPlayer
             {
                 SelectionIndex = entry.TeamSelectionIndex ?? -1,
-                PlayerId = member?.Id,
-                Name = member?.Name,
+                PlayerId = person is { } id ? people.Id(id) : null,
+                Name = person is { } named ? people.Name(named) : null,
                 CameOnAsSubstitute = isSubstitute,
                 MinuteOn = minuteOn,
                 MinuteOff = minuteOff,
@@ -233,7 +297,7 @@ internal sealed class MatchesBridgeClient(GameBridge bridge, GameVocabulary voca
         });
 
         var lineupPlayers = (await Task.WhenAll(players)).ToList();
-        return (lineupPlayers, changes.Select(change => Substitution(change, startersBySlot, squad, lineupPlayers)).ToList());
+        return (lineupPlayers, changes.Select(change => Substitution(change, startersBySlot, people, lineupPlayers)).ToList());
     }
 
     // The lineup leaves out some substitutes (seen: two who came on in the 90th minute); their match lines have them.
@@ -257,21 +321,22 @@ internal sealed class MatchesBridgeClient(GameBridge bridge, GameVocabulary voca
     private static MatchSubstitution Substitution(
         SlotChange change,
         IReadOnlyDictionary<int, BridgeLineupEntryDto> startersBySlot,
-        IReadOnlyDictionary<int, SquadMember> squad,
+        MatchPeople people,
         List<MatchLineupPlayer> players)
     {
-        var off = squad.GetValueOrDefault(change.OffPlayer);
-        var on = squad.GetValueOrDefault(change.OnPlayer);
+        var offId = people.Id(change.OffPlayer);
+        var slot = change is { Uncertain: false, Slot: { } held } ? startersBySlot.GetValueOrDefault(held) : null;
 
         return new MatchSubstitution
         {
             Minute = change.Minute,
-            OffPlayerId = off?.Id,
-            Off = off?.Name,
-            OnPlayerId = on?.Id,
-            On = on?.Name,
-            Position = startersBySlot.GetValueOrDefault(change.Slot)?.Position is { } mask ? PositionMasks.ToPosition(mask) : null,
-            Injury = off?.Id is { } id && players.Any(player => player.PlayerId == id && player.WentOffInjured)
+            OffPlayerId = offId,
+            Off = people.Name(change.OffPlayer),
+            OnPlayerId = people.Id(change.OnPlayer),
+            On = people.Name(change.OnPlayer),
+            Position = slot?.Position is { } mask ? PositionMasks.ToPosition(mask) : null,
+            Injury = offId is { } id && players.Any(player => player.PlayerId == id && player.WentOffInjured),
+            Uncertain = change.Uncertain
         };
     }
 
@@ -324,27 +389,7 @@ internal sealed class MatchesBridgeClient(GameBridge bridge, GameVocabulary voca
         return table.Items.FirstOrDefault()?.Values.Roles?.FirstOrDefault(row => row.TacticsRoleId == roleId);
     }
 
-    // An incident's side is 0 for the home team and 1 for the away team. Only the user's own players have names.
-    private static List<MatchGoal> Goals(BridgeMatchEventsDto events, bool isHome, IReadOnlyDictionary<int, SquadMember> squad)
-    {
-        return (events.Incidents ?? [])
-            .Where(incident => incident.IncidentType == MatchConstants.GoalIncident)
-            .Select(incident =>
-            {
-                var isOurs = (incident.TeamSelectionIndex == 0) == isHome;
-
-                return new MatchGoal
-                {
-                    Minute = incident.TimeString ?? string.Empty,
-                    IsOurs = isOurs,
-                    Scorer = isOurs ? NameOf(incident.Player, squad) : null,
-                    Assister = isOurs ? NameOf(incident.Player2, squad) : null
-                };
-            })
-            .ToList();
-    }
-
-    private static PlayerOfTheMatch? PlayerOfTheMatch(BridgeMatchEventsDto events, IReadOnlyDictionary<int, SquadMember> squad)
+    private static PlayerOfTheMatch? PlayerOfTheMatch(BridgeMatchEventsDto events, MatchPeople people)
     {
         if (string.IsNullOrEmpty(events.PlayerOfTheMatchName))
         {
@@ -355,14 +400,23 @@ internal sealed class MatchesBridgeClient(GameBridge bridge, GameVocabulary voca
         {
             Name = events.PlayerOfTheMatchName,
             Rating = events.PlayerOfTheMatchRating,
-            IsOurs = squad.Values.Any(member => member.Id == events.PlayerOfTheMatchId)
+            IsOurs = events.PlayerOfTheMatchId is { } id && people.IsOurs(id)
         };
     }
 
-    private static string? NameOf(BridgeReferenceDto? player, IReadOnlyDictionary<int, SquadMember> squad)
-    {
-        return player?.Index is { } index ? squad.GetValueOrDefault(index)?.Name : null;
-    }
-
     private sealed record SquadMember(int ListIndex, int? Id, string? Name);
+
+    // The user's players by database index: as the match names them (it still knows those who have since left the
+    // club), and as squad members where they're still at the club, which their role tables need.
+    private sealed class MatchPeople(
+        IReadOnlyDictionary<int, SquadMember> squad, IReadOnlyDictionary<int, BridgeMatchPersonDto> inMatch)
+    {
+        public SquadMember? Member(int person) => squad.GetValueOrDefault(person);
+
+        public int? Id(int person) => inMatch.GetValueOrDefault(person)?.Id ?? squad.GetValueOrDefault(person)?.Id;
+
+        public string? Name(int person) => inMatch.GetValueOrDefault(person)?.Name ?? squad.GetValueOrDefault(person)?.Name;
+
+        public bool IsOurs(int id) => inMatch.Values.Any(person => person.Id == id) || squad.Values.Any(member => member.Id == id);
+    }
 }

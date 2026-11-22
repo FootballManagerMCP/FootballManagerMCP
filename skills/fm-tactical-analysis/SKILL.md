@@ -17,7 +17,10 @@ wants, write a tactic into the game with `set_tactic`. Every tool reads the live
 2. Call `get_matches`, always. It gives the season's record and every match with the shape the team lined up in, so
    results can be tied to the tactic actually used. Match each shape to a slot by its formation (the slots use
    different shapes). Open a few matches with `get_match` when a pattern needs explaining, e.g. the draws, or the
-   games a tactic was used in.
+   games a tactic was used in. The game keeps no record of tactical changes made during a match (its
+   `lineupRearranged` only says the shape changed or players swapped), and a change made during a match doesn't stay
+   in the slot. Before reading a match's numbers as the tactic's, ask the user whether they changed anything during
+   it: a low pressing count may be their choice, not the plan failing.
 3. Call `get_role_fit` only for the positions the first pass flags (step 2). Use one call per position and phase,
    with the base code (`DC` for a DCL slot). Don't call it for every position by reflex.
 4. Call `get_team` for the opponent when the question is about a coming match (how they play home or away, their
