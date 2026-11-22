@@ -274,8 +274,22 @@ public class MappingConfig
             .Map(dest => dest.RedCard, src => src.RedCard ? true : (bool?)null);
 
         config.NewConfig<MatchSubstitution, MatchSubstitutionResponse>()
-            .Map(dest => dest.Injury, src => src.Injury ? true : (bool?)null);
+            .Map(dest => dest.Injury, src => src.Injury ? true : (bool?)null)
+            .Map(dest => dest.Uncertain, src => src.Uncertain ? true : (bool?)null);
         Rounded(config.NewConfig<PlayerOfTheMatch, PlayerOfTheMatchResponse>());
+
+        // An ordinary goal needs no kind.
+        config.NewConfig<MatchGoal, MatchGoalResponse>()
+            .Map(dest => dest.Kind, src => src.Kind == GoalKind.Goal ? (GoalKind?)null : src.Kind);
+        config.NewConfig<MatchRedCard, MatchRedCardResponse>();
+        config.NewConfig<PenaltyShootout, PenaltyShootoutResponse>();
+        config.NewConfig<PenaltyKick, PenaltyKickResponse>();
+
+        // What didn't happen, or what the game no longer keeps, is left out.
+        config.NewConfig<MatchDetail, MatchDetailResponse>()
+            .Map(dest => dest.RedCards, src => src.RedCards, src => src.RedCards.Count > 0)
+            .Map(dest => dest.LineupRearranged, src => src.LineupRearranged ? true : (bool?)null)
+            .Map(dest => dest.Analysis, src => src.Analysis, src => src.Analysis.Count > 0);
 
         Rounded(config.NewConfig<StyleAverages, StyleAveragesResponse>());
     }

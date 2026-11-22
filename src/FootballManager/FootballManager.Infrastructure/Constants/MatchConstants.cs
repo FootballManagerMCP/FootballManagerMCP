@@ -1,3 +1,5 @@
+using System.Globalization;
+
 namespace FootballManager.Infrastructure.Constants;
 
 // The game's property paths and contexts for fixtures, as its fixtures and match screens bind them.
@@ -54,16 +56,58 @@ internal static class MatchConstants
     public const string PlayerStats = "PlayerMatchStats";
 
     // A player's last incident on his match line, as the game numbers them: 0 none, 1 came on, 2 went off (substituted,
-    // injured or not), 3 booked and stayed on, 6 came on and went off injured, as seen across a season of matches.
+    // injured or not), 3 booked (a player later sent off keeps it, with his first booking's minute), 6 came on and went
+    // off injured, as seen across a season of matches.
     public const int CameOnIncident = 1;
+    public const int WentOffIncident = 2;
     public const int InjuredOffIncident = 6;
 
-    // Goals and the player of the match (context ShowAllEventTypes).
-    public const string Incidents = "Incidents";
+    // The player of the match, and the game's post-match analysis: a list of findings, kept for the last five matches.
     public const string PlayerOfTheMatchId = "PlayerOfTheMatch." + GameConstants.UniqueId;
     public const string PlayerOfTheMatchName = "PlayerOfTheMatch." + GameConstants.Name;
     public const string PlayerOfTheMatchRating = "PlayerOfTheMatchRating";
-    public const int GoalIncident = 0;
+    public const string Analysis = "PostMatchAnalysisKeyFindings";
 
-    public static readonly string[] Events = [Incidents, PlayerOfTheMatchId, PlayerOfTheMatchName, PlayerOfTheMatchRating];
+    public static readonly string[] Events = [PlayerOfTheMatchId, PlayerOfTheMatchName, PlayerOfTheMatchRating, Analysis];
+
+    // A match's incidents, read as a list of the fixture (context ShowAllEventTypes): goals, red cards and a shoot-out's
+    // penalties, with their side (0 home, 1 away; an own goal's is the side it counts for), minute and players.
+    public const string Incidents = "Incidents";
+    public const string IncidentType = "IncidentType";
+    public const string IncidentSide = "TeamSelectionIndex";
+    public const string IncidentMinute = "TimeString";
+    public const string IncidentPlayer = "Player";
+    public const string IncidentPlayerName = "Player." + GameConstants.Name;
+    public const string IncidentPlayerId = "Player." + GameConstants.UniqueId;
+    public const string IncidentSecondPlayer = "Player2";
+    public const string IncidentSecondPlayerName = "Player2." + GameConstants.Name;
+
+    public static readonly string[] IncidentProps =
+    [
+        IncidentType, IncidentSide, IncidentMinute, IncidentPlayer, IncidentPlayerName, IncidentPlayerId, IncidentSecondPlayer,
+        IncidentSecondPlayerName
+    ];
+
+    // Incident types, as seen across a season: a goal (the scorer, and the assister as the second player), an own goal
+    // (the player who put it into his own net), a penalty scored, a red card, and a shoot-out penalty scored or missed.
+    public const int GoalIncident = 0;
+    public const int OwnGoalIncident = 1;
+    public const int PenaltyGoalIncident = 2;
+    public const int RedCardIncident = 3;
+    public const int ShootoutScoredIncident = 4;
+    public const int ShootoutMissedIncident = 5;
+
+    // The players of one side's match lines, read as a list of the fixture (context IsHomeTeam), for their names: the
+    // match keeps them for players who have since left the club.
+    public const string PlayerStatsPlayer = "Player";
+    public const string PlayerStatsName = "Player." + GameConstants.Name;
+    public const string PlayerStatsId = "Player." + GameConstants.UniqueId;
+
+    public static readonly string[] PlayerStatsPeople = [PlayerStatsPlayer, PlayerStatsName, PlayerStatsId];
+
+    // A list belonging to the fixture at a place in the fixture list.
+    public static string OfFixture(int index, string list)
+    {
+        return $"{FixtureList}[{index.ToString(CultureInfo.InvariantCulture)}].{list}";
+    }
 }

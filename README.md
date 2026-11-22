@@ -60,7 +60,7 @@ Everything runs on your PC. Nothing is sent anywhere, except what your AI client
 | | `get_tactic_options` | Every style, mentality, formation and instruction a tactic can take |
 | | `set_tactic` | Builds or changes a tactic in a slot: shape, roles, lineup, instructions |
 | Matches | `get_matches` | Your season so far, match by match, with the shape you played |
-| | `get_match` | One match in depth: both teams' numbers, goals, substitutions, every player's position, role and stats |
+| | `get_match` | One match in depth: both teams' numbers, goals, red cards, shoot-outs, substitutions, every player's position, role and stats, and the game's post-match analysis |
 | Opponents | `get_team` | A scouting report on any team: record, style home and away, usual shapes and starters, squad |
 | Scouting | `get_scouting` | Your recruitment set-up: scouts, focuses, budget |
 | | `get_scouted_players` | Players from a scouting list (recommendations, shortlist, a focus, the player search) |

@@ -29,19 +29,28 @@ public static class MatchesTools
     [McpServerTool(Name = "get_match")]
     [Description("Get one of the user's matches in depth: the summary (as in get_matches), both teams' numbers (xG, " +
                  "possession, shots, chances created, crosses, passes, progressive and final-third passes, PPDA, " +
-                 "tackles, headers, offsides, cards, average rating), the goals with minute, scorer and assister, the " +
-                 "player of the match, the user's substitutions (minute, who came off and on, the slot's position, " +
-                 "injuries), and the user's players who took part: rating, when a substitute came on and when a player " +
-                 "went off (and whether injured), cards, position and role in and out of possession, and their numbers " +
-                 "(goals, assists, xG, xA, shots, key passes, clear-cut chances, passes, dribbles, crosses, tackles, " +
-                 "interceptions, possession won and lost, aerial duels, distance). A substitute's positions and roles " +
-                 "are those of the slot he took: the game doesn't keep any reshuffle made after a change. The game " +
+                 "tackles, headers, offsides, cards, average rating), both sides' goals with minute, scorer and " +
+                 "assister (kind 'Penalty' or 'OwnGoal' when it is one; an own goal counts for the side it was scored " +
+                 "for, its scorer is the player who put it into his own net), red cards with minute and player, a " +
+                 "penalty shoot-out kick by kick, the player of the match, the user's substitutions (minute, who came " +
+                 "off and on, the slot's position, injuries), and the user's players who took part: rating, when a " +
+                 "substitute came on and when a player went off (injured, or sent off at his red card's minute), cards, " +
+                 "position and role in and out of possession, and their numbers (goals, assists, xG, xA, shots, key " +
+                 "passes, clear-cut chances, passes, dribbles, crosses, tackles, interceptions, possession won and " +
+                 "lost, aerial duels, distance). For the last five matches it also gives 'analysis', the game's own " +
+                 "post-match findings (in its display language). The game keeps no record of tactical changes made " +
+                 "during a match: 'lineupRearranged' true says only that it moved starters to other slots (a change of " +
+                 "shape, or players swapping places); positions are those the players started in, and a substitute's " +
+                 "those of the player he replaced. So ask the user what they changed during the match before judging " +
+                 "a tactic on its numbers. Nothing says who replaced whom either: substitutions are paired by minute, " +
+                 "and when several were made in the same minute and the slots can't tell them apart they're marked " +
+                 "'uncertain' (the players are right, the pairing may not be) and give no position. A substitute who " +
+                 "came on and went off again is traced when only one fits, else his minute on is left out. The game " +
                  "doesn't link a player's slots in the two phases either: out-of-possession positions are paired with " +
-                 "the starters so that the eleven move least, which matches the tactic's own links. A substitute who " +
-                 "came on and went off again is traced when only one fits, else his minute on is left out. Names are " +
-                 "only known for the user's own players. An upcoming match returns just its summary. Roles come as " +
-                 "keys (the game's English identifiers, as set_tactic takes them) and names in the game's display " +
-                 "language; the name is missing for a player in a position he can't play.")]
+                 "the starters so that the eleven move least, which matches the tactic's own links. An upcoming match " +
+                 "returns just its summary. Roles come as keys (the game's English identifiers, as set_tactic takes " +
+                 "them) and names in the game's display language; the name is missing for a player in a position he " +
+                 "can't play.")]
     public static async Task<string> GetMatch(
         IHttpClientFactory httpFactory,
         [Description("The match date as yyyy-MM-dd, as get_matches lists it.")]

@@ -7,14 +7,16 @@ public class MatchLineupPlayer
     public int SelectionIndex { get; set; }
     public int? PlayerId { get; set; }
 
-    /// <summary>Null for a player who has since left the squad.</summary>
+    /// <summary>As the match names him, so also for a player who has since left the club.</summary>
     public string? Name { get; set; }
     public bool CameOnAsSubstitute { get; set; }
 
-    /// <summary>When a substitute came on. Unknown for one who came on and left again, unless his slot can be traced.</summary>
+    /// <summary>When a substitute came on. Unknown for one who came on and left again, unless he can be traced.</summary>
     public int? MinuteOn { get; set; }
 
-    /// <summary>When the player left the pitch: substituted, injured or sent off. Null when he played to the end.</summary>
+    /// <summary>
+    /// When the player left the pitch: substituted, injured or sent off (90+2 is 92). Null when he played to the end.
+    /// </summary>
     public int? MinuteOff { get; set; }
 
     /// <summary>He left the pitch injured.</summary>
